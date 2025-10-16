@@ -2,6 +2,10 @@
 
 This project is an enhanced Arduino-based ESP32 sketch to read and log Tigo solar optimizer data (TAP ↔ CCA communication) using RS485.
 
+<img src="images/home.png" alt="esp32" width="1000"/>
+<img src="images/logviewer.png" alt="esp32" width="1000"/>
+<img src="images/spiffs.png" alt="esp32" width="1000"/>
+
 ## 🛠️ Hardware Requirements
 
 - **ESP32 / ESP32-S3** (with enough flash for SPIFFS)
