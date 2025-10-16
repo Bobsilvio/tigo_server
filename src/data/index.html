@@ -13,9 +13,30 @@
       padding: 20px;
     }
 
+    nav {
+      background-color: #222;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    nav a {
+      color: #fff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    nav a:hover {
+      text-decoration: underline;
+    }
+
     h1 {
       text-align: center;
-      margin-bottom: 20px;
+      margin: 10px 0 20px;
     }
 
     .grid {
@@ -36,6 +57,7 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      transition: background-color 0.3s ease;
     }
 
     .id {
@@ -58,6 +80,15 @@
   </style>
 </head>
 <body>
+  <!-- 🔹 Menu -->
+  <nav>
+    <a href="/debug">🧠 Debug</a>
+    <a href="/spiffs">💾 SPIFFS</a>
+    <a href="/logs">📜 Logs</a>
+    <a href='/logviewer.html'>📊 Log Viewer</a>
+    <a href="#" onclick="fetch('/reboot',{method:'POST'}).then(()=>location.reload());">🔁 Reboot</a>
+  </nav>
+
   <h1>Real-Time PV Modules Data</h1>
   <div class="grid" id="container"></div>
 
@@ -106,7 +137,7 @@
             <div>Watt: <span>${data.watt} W</span></div>
             <div>Vin/Vout: <span>${data.vin?.toFixed(2)} / ${data.vout?.toFixed(2)} V</span></div>
             <div>Current: <span>${data.amp?.toFixed(2)} A</span></div>
-            <div>Temperature: <span>${data.temp?.toFixed(1)} °C</span></div>
+            <div>Temperature: <span>${data.temp?.toFixed(1)} &deg;C</span></div>
             <div>RSSI: <span>${data.rssi} dBm</span></div>
             <div>Barcode: <span>${data.barcode || "n/a"}</span></div>
           `;

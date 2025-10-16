@@ -27,8 +27,8 @@ constexpr uint16_t POLYNOMIAL = 0x8408;  // Reversed polynomial (0x1021 reflecte
 constexpr size_t TABLE_SIZE = 256;
 uint16_t CRC_TABLE[TABLE_SIZE];
 
-#define RX_PIN 4  // Define the RX pin
-#define TX_PIN 5  // Define the TX pin
+#define RX_PIN 3  // Define the RX pin
+#define TX_PIN 1  // Define the TX pin
 
 String incomingData = "";
 String completeFrame = "";
@@ -356,15 +356,25 @@ void saveNodeTable() {
     return;
   }
 
-  SPIFFS.remove("/nodetable.json");  // ensure overwrite
-  File file = SPIFFS.open("/nodetable.json", "w");
-  
+  // Check SPIFFS mounted
+  if (!SPIFFS.begin(true)) {
+    WebSerial.println("❌ SPIFFS not mounted - cannot save NodeTable.");
+    return;
+  }
+
+  // Remove old file if exists
+  if (SPIFFS.exists("/nodetable.json")) {
+    SPIFFS.remove("/nodetable.json");
+  }
+
+  File file = SPIFFS.open("/nodetable.json", FILE_WRITE);
   if (!file) {
     WebSerial.println("❌ Failed to open /nodetable.json for writing.");
     return;
   }
 
-  StaticJsonDocument<4096> doc;
+  // Document size: aumentato per sicurezza (ogni entry ~ 64-128 bytes)
+  StaticJsonDocument<16384> doc; // aumentato da 4096 -> 16384
   JsonArray arr = doc.to<JsonArray>();
 
   for (int i = 0; i < NodeTable_count; i++) {
@@ -374,14 +384,17 @@ void saveNodeTable() {
     obj["checksum"] = NodeTable[i].checksum;
   }
 
-  if (serializeJsonPretty(doc, file) == 0) {
-    WebSerial.println("❌ Failed to write JSON to file.");
-  } else {
-    WebSerial.println("✅ NodeTable saved to /nodetable.json.");
-  }
-
+  size_t written = serializeJson(doc, file); // meno overhead rispetto a pretty
+  file.flush();
   file.close();
+
+  if (written == 0) {
+    WebSerial.println("❌ Failed to write JSON to file (0 bytes written).");
+  } else {
+    WebSerial.println("✅ NodeTable saved to /nodetable.json. bytes: " + String(written));
+  }
 }
+
 
 
 
@@ -746,74 +759,46 @@ void setupNTP() {
 }
 
 void loopLogging() {
-  static unsigned long lastLogTime = 0;
-  time_t now = time(nullptr);
-  struct tm* timeinfo = localtime(&now);
-  unsigned long currentMillis = millis();
-
-  if (currentMillis - lastLogTime >= 30000) { // ogni 30s
+    static unsigned long lastLogTime = 0;
+    unsigned long currentMillis = millis();
+    if (currentMillis - lastLogTime < 30000) return; // ogni 30s
     lastLogTime = currentMillis;
 
-    char filename[32];
-    strftime(filename, sizeof(filename), "/log_%Y-%m-%d.json", timeinfo);
-
-    // Controllo spazio
-    size_t used = SPIFFS.usedBytes();
-    if (used > MAX_SPIFFS_USAGE) {
-      File root = SPIFFS.open("/");
-      File oldestFile;
-      time_t oldestTime = now;
-
-      while (File entry = root.openNextFile()) {
-        String name = entry.name();
-        if (name.startsWith("/log_") && name.endsWith(".json")) {
-          struct tm tm{};
-          if (sscanf(name.c_str(), "/log_%d-%d-%d.json", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
-            tm.tm_year -= 1900;
-            tm.tm_mon -= 1;
-            time_t fileTime = mktime(&tm);
-            if (fileTime < oldestTime) {
-              oldestTime = fileTime;
-              oldestFile = entry;
-            }
-          }
-        }
-      }
-      if (oldestFile) {
-        Serial.println("❌ SPIFFS quasi pieno. Elimino: " + String(oldestFile.name()));
-        SPIFFS.remove(oldestFile.name());
-      }
-    }
+    String filename = getDateFilename(); // log del giorno
+    ensureFreeSpaceExceptToday(filename); // rimuove i log vecchi
 
     File logFile = SPIFFS.open(filename, FILE_APPEND);
-    if (!logFile) return;
-
-    if (logFile.size() > MAX_LOG_FILE_SIZE) {
-      logFile.close();
-      Serial.println("📦 File troppo grande. Non si scrive.");
-      return;
+    if (!logFile) {
+        Serial.println("❌ Non posso aprire il file log!");
+        return;
     }
 
-    StaticJsonDocument<2048> doc;
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
-    String json = "{\"ts\":\"" + String(timestamp) + "\",\"modules\":{";
+    const size_t MAX_LOG_SIZE = 1100000; // 1.1 MB massimo
+    if (logFile.size() > MAX_LOG_SIZE) {
+        logFile.close();
+        Serial.println("📦 File log troppo grande, non scrivo più oggi.");
+        return;
+    }
 
+    String timestamp = getTimestampISO8601();
     for (int i = 0; i < deviceCount; i++) {
-      if (i > 0) json += ",";
-      json += "\"" + String(devices[i].barcode) + "\":{";
-      json += "\"vin\":" + String(devices[i].voltage_in, 2);
-      json += ",\"vout\":" + String(devices[i].voltage_out, 2);
-      json += ",\"amp\":" + String(devices[i].current_in, 2);
-      json += ",\"watt\":" + String(round(devices[i].voltage_out * devices[i].current_in));
-      json += ",\"temp\":" + String(devices[i].temperature, 1);
-      json += "}";
+        int watt = round(devices[i].voltage_out * devices[i].current_in);
+        String line = "{";
+        line += "\"ts\":\"" + timestamp + "\",";
+        line += "\"barcode\":\"" + devices[i].barcode + "\",";
+        line += "\"vin\":" + String(devices[i].voltage_in, 2) + ",";
+        line += "\"vout\":" + String(devices[i].voltage_out, 2) + ",";
+        line += "\"amp\":" + String(devices[i].current_in, 2) + ",";
+        line += "\"watt\":" + String(watt) + ",";
+        line += "\"temp\":" + String(devices[i].temperature, 1);
+        line += "}\n";
+        logFile.print(line);
     }
-    json += "}}\n";
-    logFile.print(json);
+
     logFile.close();
-  }
 }
+
+
 
 
 bool allBarcodesKnown() {
@@ -825,6 +810,24 @@ bool allBarcodesKnown() {
   return true;
 }
 
+void ensureFreeSpaceExceptToday(String todayFilename) {
+    if (!SPIFFS.begin(true)) {
+        Serial.println("❌ SPIFFS non montato!");
+        return;
+    }
+
+    File root = SPIFFS.open("/");
+    if (!root) return;
+
+    File entry;
+    while (entry = root.openNextFile()) {
+        String name = entry.name();
+        if (name.startsWith("/log_") && name.endsWith(".json") && name != todayFilename) {
+            SPIFFS.remove(name);
+            Serial.println("🗑️ Cancellato log vecchio: " + name);
+        }
+    }
+}
 
 void ensureFreeSpace() {
   size_t used = SPIFFS.usedBytes();
