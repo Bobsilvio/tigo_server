@@ -3,152 +3,517 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Real-Time PV Modules Data</title>
+  <title>TigoServer · PV Monitor</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d0d0d;
+      --surface: #1a1a1a;
+      --border:  #2e2e2e;
+      --accent:  #f0a500;
+      --green:   #4caf50;
+      --blue:    #42a5f5;
+      --red:     #ef5350;
+      --text:    #e0e0e0;
+      --muted:   #777;
+      --radius:  12px;
+    }
+
     body {
-      background-color: #111;
-      color: white;
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 14px;
     }
 
+    /* ── Nav ── */
     nav {
-      background-color: #222;
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 20px;
       display: flex;
-      justify-content: center;
-      gap: 15px;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      margin-bottom: 16px;
       flex-wrap: wrap;
+      gap: 8px;
     }
-
+    .nav-links { display: flex; gap: 4px; flex-wrap: wrap; }
     nav a {
-      color: #fff;
+      color: var(--text);
       text-decoration: none;
-      font-weight: bold;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 5px 11px;
+      border-radius: 7px;
+      transition: background .18s;
     }
+    nav a:hover { background: var(--border); }
+    nav a.danger { color: var(--red); }
+    nav a.danger:hover { background: rgba(239,83,80,.13); }
 
-    nav a:hover {
-      text-decoration: underline;
+    /* ── WS status ── */
+    .ws-status { display: flex; align-items: center; gap: 7px; }
+    #status-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+      transition: background .4s, box-shadow .4s;
     }
-
-    h1 {
-      text-align: center;
-      margin: 10px 0 20px;
+    #status-dot.on {
+      background: var(--green);
+      box-shadow: 0 0 7px var(--green);
     }
+    #status-label { font-size: 0.8rem; color: var(--muted); }
 
+    /* ── Summary pills ── */
+    #summary {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 9px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 100px;
+    }
+    .pill .pval {
+      font-size: 1.45rem;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--accent);
+    }
+    .pill .plbl {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-top: 1px;
+    }
+    .pill.c-green .pval { color: var(--green); }
+    .pill.c-blue  .pval { color: var(--blue);  }
+
+    /* ── Grid ── */
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(205px, 1fr));
       gap: 12px;
-      justify-items: center;
     }
 
+    /* ── Module card ── */
     .module {
-      background-color: #333;
-      border: 2px solid #aaa;
-      border-radius: 8px;
-      padding: 10px;
-      width: 160px;
-      box-sizing: border-box;
-      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 14px 11px;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      transition: background-color 0.3s ease;
+      gap: 9px;
+      position: relative;
+      overflow: hidden;
+      transition: transform .15s, opacity .4s;
+    }
+    .module:hover { transform: translateY(-2px); }
+    .module.stale { opacity: .45; }
+
+    /* coloured left bar */
+    .module::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 4px;
+      background: var(--bar-color, var(--border));
+      transition: background .5s;
     }
 
-    .id {
-      font-size: 0.9em;
-      font-weight: bold;
-      margin-bottom: 4px;
+    /* RSSI badge top-right */
+    .rssi-badge {
+      position: absolute;
+      top: 9px; right: 9px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
     }
 
+    .mod-id {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: .04em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: calc(100% - 60px);
+    }
+
+    .watt-row {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+    }
+    .watt-val {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--text);
+    }
+    .watt-unit { font-size: 0.82rem; color: var(--muted); }
+
+    /* watt progress bar */
+    .wbar-wrap {
+      height: 4px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .wbar {
+      height: 100%;
+      background: var(--bar-color, var(--accent));
+      border-radius: 3px;
+      transition: width .55s ease;
+      width: 0%;
+    }
+
+    /* 2-col metrics */
     .metrics {
-      font-size: 0.75em;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 8px;
+    }
+    .metric { display: flex; flex-direction: column; }
+    .metric .ml { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .metric .mv { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+    .metric .mv.blue { color: var(--blue); }
+
+    /* barcode row */
+    .barcode-row {
+      font-size: 0.65rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .barcode-row span { color: var(--text); font-weight: 600; }
+
+    /* timestamp */
+    .mod-ts {
+      font-size: 0.6rem;
+      color: #555;
+      text-align: right;
     }
 
-    .metrics div span {
-      color: #4fc3f7;
-      font-weight: bold;
+    /* ── Charts section ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 700px) { .charts-row { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 14px 6px;
+    }
+    .chart-card h3 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 8px;
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 <body>
-  <!-- 🔹 Menu -->
+
   <nav>
-    <a href="/debug">🧠 Debug</a>
-    <a href="/spiffs">💾 SPIFFS</a>
-    <a href="/logs">📜 Logs</a>
-    <a href='/logviewer.html'>📊 Log Viewer</a>
-    <a href="#" onclick="fetch('/reboot',{method:'POST'}).then(()=>location.reload());">🔁 Reboot</a>
+    <div class="nav-links">
+      <a href="/debug">🧠 Debug</a>
+      <a href="/panels">🔖 Pannelli</a>
+      <a href="/spiffs">💾 SPIFFS</a>
+      <a href="#" class="danger"
+         onclick="if(confirm('Riavviare il dispositivo?'))fetch('/reboot',{method:'POST'}).then(()=>setTimeout(()=>location.reload(),5000))">
+         🔁 Reboot
+      </a>
+    </div>
+    <div class="ws-status">
+      <span id="status-dot"></span>
+      <span id="status-label">Disconnected</span>
+    </div>
   </nav>
 
-  <h1>Real-Time PV Modules Data</h1>
+  <div id="summary">
+    <div class="pill">
+      <span class="pval" id="s-total">0</span>
+      <span class="plbl">Watt totali</span>
+    </div>
+    <div class="pill c-green">
+      <span class="pval" id="s-count">0</span>
+      <span class="plbl">Moduli</span>
+    </div>
+    <div class="pill c-blue">
+      <span class="pval" id="s-avgvin">—</span>
+      <span class="plbl">Vin medio</span>
+    </div>
+    <div class="pill c-blue">
+      <span class="pval" id="s-avgtemp">—</span>
+      <span class="plbl">Temp media</span>
+    </div>
+  </div>
+
   <div class="grid" id="container"></div>
 
+  <!-- Charts -->
+  <div class="charts-row" id="charts-row" style="margin-top:16px">
+    <div class="chart-card">
+      <h3>Potenza totale — ultimi 60 campioni</h3>
+      <div id="chart-power"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Potenza per pannello (W attuale)</h3>
+      <div id="chart-panels"></div>
+    </div>
+  </div>
+
   <script>
-    const socket = new WebSocket(`ws://${location.host}/ws`);
+    const socket    = new WebSocket(`ws://${location.host}/ws`);
     const container = document.getElementById('container');
-    const modules = {};
+    const modules   = {};   // id → { el, lastUpdate }
+    const data_map  = {};   // id → last data object
 
-    const maxWatt = 300;
-    const minColor = [51, 51, 51];
-    const maxColor = [76, 189, 73];
+    const MAX_WATT = 400;   // adatta al tuo impianto
+    const STALE_MS = 90000; // ms senza aggiornamento → card opaca
 
-    function interpolateColor(c1, c2, f) {
-      return `rgb(${c1.map((c, i) => Math.round(c + f * (c2[i] - c))).join(",")})`;
+    // grey → amber → green
+    function wattColor(w) {
+      const f = Math.max(0, Math.min(1, w / MAX_WATT));
+      if (f < 0.5) return lerpRGB([46,46,46], [240,165,0], f * 2);
+      return lerpRGB([240,165,0], [76,175,80], (f - 0.5) * 2);
     }
+    function lerpRGB(a, b, t) {
+      return `rgb(${a.map((v,i)=>Math.round(v+t*(b[i]-v))).join(',')})`;
+    }
+    function timeStr() { return new Date().toLocaleTimeString(); }
 
-    function createModule(id) {
-      const div = document.createElement('div');
-      div.classList.add('module');
-      div.dataset.id = id;
-      div.innerHTML = `
-        <div class="id">${id}</div>
-        <div class="metrics">
-          <div>Watt: <span>n/a</span></div>
-          <div>Vin/Vout: <span>n/a</span></div>
-          <div>Current: <span>n/a</span></div>
-          <div>Temperature: <span>n/a</span></div>
-          <div>RSSI: <span>n/a</span></div>
-          <div>Barcode: <span>n/a</span></div>
+    function createCard(key) {
+      const el = document.createElement('div');
+      el.className = 'module';
+      el.innerHTML = `
+        <div class="rssi-badge" id="rssi-${key}">—</div>
+        <div class="mod-id" id="mid-${key}" title="${key}">${key}</div>
+        <div class="watt-row">
+          <span class="watt-val" id="wv-${key}">—</span>
+          <span class="watt-unit">W</span>
         </div>
+        <div class="wbar-wrap"><div class="wbar" id="wb-${key}"></div></div>
+        <div class="metrics">
+          <div class="metric">
+            <span class="ml">Vin</span>
+            <span class="mv blue" id="vin-${key}">—</span>
+          </div>
+          <div class="metric">
+            <span class="ml">Vout</span>
+            <span class="mv blue" id="vout-${key}">—</span>
+          </div>
+          <div class="metric">
+            <span class="ml">Corrente</span>
+            <span class="mv" id="amp-${key}">—</span>
+          </div>
+          <div class="metric">
+            <span class="ml">Temp</span>
+            <span class="mv" id="temp-${key}">—</span>
+          </div>
+        </div>
+        <div class="barcode-row">SN: <span id="bc-${key}">—</span></div>
+        <div class="mod-ts" id="ts-${key}"></div>
       `;
-      container.appendChild(div);
-      modules[id] = div;
-      return div;
+      el.dataset.label = key;
+      container.appendChild(el);
+      modules[key] = { el, lastUpdate: Date.now() };
+      return modules[key];
     }
+
+    function updateSummary() {
+      const list = Object.values(data_map);
+      const tot   = list.reduce((s,d) => s + (d.watt||0), 0);
+      const avgV  = list.length ? list.reduce((s,d)=>s+(d.vin||0),0)/list.length : null;
+      const avgT  = list.length ? list.reduce((s,d)=>s+(d.temp||0),0)/list.length : null;
+      document.getElementById('s-total').textContent  = tot.toFixed(0);
+      document.getElementById('s-count').textContent  = list.length;
+      document.getElementById('s-avgvin').textContent  = avgV  != null ? avgV.toFixed(1)+'V'  : '—';
+      document.getElementById('s-avgtemp').textContent = avgT  != null ? avgT.toFixed(1)+'°C' : '—';
+    }
+
+    socket.onopen = () => {
+      document.getElementById('status-dot').classList.add('on');
+      document.getElementById('status-label').textContent = 'Live';
+    };
+    socket.onclose = () => {
+      document.getElementById('status-dot').classList.remove('on');
+      document.getElementById('status-label').textContent = 'Disconnected – reconnecting…';
+      setTimeout(() => location.reload(), 5000);
+    };
 
     socket.onmessage = function(event) {
       try {
-        const dataList = JSON.parse(event.data);
-        dataList.forEach(data => {
-          const id = data.id || "mod#NA";
-          let mod = modules[id];
-          if (!mod) mod = createModule(id);
+        const list = JSON.parse(event.data);
+        list.forEach(d => {
+          // Chiave stabile = addr corto (non cambia anche se assegni etichetta)
+          const key = d.addr || d.id || 'mod#NA';
+          let entry = modules[key];
+          if (!entry) entry = createCard(key);
 
-          mod.querySelector('.metrics').innerHTML = `
-            <div>Watt: <span>${data.watt} W</span></div>
-            <div>Vin/Vout: <span>${data.vin?.toFixed(2)} / ${data.vout?.toFixed(2)} V</span></div>
-            <div>Current: <span>${data.amp?.toFixed(2)} A</span></div>
-            <div>Temperature: <span>${data.temp?.toFixed(1)} &deg;C</span></div>
-            <div>RSSI: <span>${data.rssi} dBm</span></div>
-            <div>Barcode: <span>${data.barcode || "n/a"}</span></div>
-          `;
+          data_map[key]      = d;
+          entry.lastUpdate   = Date.now();
+          entry.el.classList.remove('stale');
 
-          const norm = Math.max(0, Math.min(1, data.watt / maxWatt));
-          mod.style.backgroundColor = interpolateColor(minColor, maxColor, norm);
+          // Etichetta visualizzata: panel > barcode > addr
+          const displayName = d.panel || d.barcode || key;
+          const g = s => document.getElementById(s + key);
+          g('mid-').textContent  = displayName;
+          g('mid-').title        = displayName + (d.panel ? ' (' + d.barcode + ')' : '');
+          entry.el.dataset.label = displayName;
+
+          const color = wattColor(d.watt || 0);
+          const pct   = Math.min(100, ((d.watt||0) / MAX_WATT) * 100).toFixed(1);
+          entry.el.style.setProperty('--bar-color', color);
+
+          g('wv-'  ).textContent = d.watt ?? '—';
+          g('wb-'  ).style.width = pct + '%';
+          g('vin-' ).textContent = d.vin   != null ? d.vin.toFixed(2) +'V'  : '—';
+          g('vout-').textContent = d.vout  != null ? d.vout.toFixed(2)+'V'  : '—';
+          g('amp-' ).textContent = d.amp   != null ? d.amp.toFixed(2) +'A'  : '—';
+          g('temp-').textContent = d.temp  != null ? d.temp.toFixed(1)+'°C' : '—';
+          g('rssi-').textContent = d.rssi  != null ? d.rssi+'dB'            : '—';
+          g('bc-'  ).textContent = d.barcode || '—';
+          g('ts-'  ).textContent = timeStr();
         });
-      } catch (err) {
-        console.error("Invalid WebSocket data:", err);
+        reorderCards();
+        updateSummary();
+        updateCharts();
+      } catch(err) {
+        console.error('WS parse error:', err);
       }
     };
+
+    function reorderCards() {
+      const cards = Array.from(container.children);
+      cards.sort((a, b) =>
+        (a.dataset.label || '').localeCompare(b.dataset.label || '', undefined, { numeric: true, sensitivity: 'base' })
+      );
+      cards.forEach(c => container.appendChild(c));
+    }
+
+    // segna le card "stale" ogni 10 s
+    setInterval(() => {
+      const now = Date.now();
+      Object.values(modules).forEach(m => {
+        m.el.classList.toggle('stale', now - m.lastUpdate > STALE_MS);
+      });
+    }, 10000);
+
+    // ─── ApexCharts ───────────────────────────────────────────────────────
+    const CHART_DARK = {
+      background: 'transparent',
+      foreColor: '#777',
+      toolbar: { show: false },
+      zoom: { enabled: false }
+    };
+    const GRID_OPTS = {
+      borderColor: '#2e2e2e',
+      strokeDashArray: 4
+    };
+    const TOOLTIP_DARK = {
+      theme: 'dark',
+      style: { fontSize: '11px' }
+    };
+
+    // --- Chart 1: total power time-series ---
+    const powerHistory = [];   // { x: timestamp ms, y: totalW }
+    const MAX_HIST = 60;
+
+    const chartPowerOpts = {
+      chart: { ...CHART_DARK, type: 'area', height: 180, animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 800 } } },
+      series: [{ name: 'Totale W', data: [] }],
+      colors: ['#f0a500'],
+      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 90] } },
+      stroke: { curve: 'smooth', width: 2 },
+      xaxis: { type: 'datetime', labels: { style: { colors: '#555', fontSize: '10px' }, datetimeFormatter: { hour: 'HH:mm', minute: 'HH:mm:ss' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+      yaxis: { labels: { style: { colors: '#555', fontSize: '10px' }, formatter: v => v.toFixed(0) + ' W' }, min: 0 },
+      grid: GRID_OPTS,
+      tooltip: { ...TOOLTIP_DARK, x: { format: 'HH:mm:ss' } },
+      dataLabels: { enabled: false }
+    };
+    const chartPower = new ApexCharts(document.getElementById('chart-power'), chartPowerOpts);
+    chartPower.render();
+
+    // --- Chart 2: per-panel bar chart ---
+    const chartPanelsOpts = {
+      chart: { ...CHART_DARK, type: 'bar', height: 180 },
+      series: [{ name: 'W', data: [] }],
+      colors: ['#42a5f5'],
+      plotOptions: { bar: { horizontal: true, barHeight: '65%', borderRadius: 4, distributed: true } },
+      legend: { show: false },
+      xaxis: { labels: { style: { colors: '#555', fontSize: '10px' }, formatter: v => v + ' W' }, min: 0 },
+      yaxis: { labels: { style: { colors: '#999', fontSize: '11px', fontWeight: 600 } } },
+      grid: GRID_OPTS,
+      tooltip: { ...TOOLTIP_DARK, y: { formatter: v => v + ' W' } },
+      dataLabels: { enabled: false }
+    };
+    const chartPanels = new ApexCharts(document.getElementById('chart-panels'), chartPanelsOpts);
+    chartPanels.render();
+
+    // helper: watt → colour string for bars
+    function barColor(w) {
+      const f = Math.max(0, Math.min(1, w / MAX_WATT));
+      if (f < 0.5) return lerpRGB([100,100,100], [240,165,0], f * 2);
+      return lerpRGB([240,165,0], [76,175,80], (f - 0.5) * 2);
+    }
+
+    // called after every WS message
+    function updateCharts() {
+      // Chart 1 — total power point
+      const vals = Object.values(data_map);
+      const tot = vals.reduce((s,d) => s + (d.watt||0), 0);
+      powerHistory.push({ x: Date.now(), y: tot });
+      if (powerHistory.length > MAX_HIST) powerHistory.shift();
+      chartPower.updateSeries([{ name: 'Totale W', data: [...powerHistory] }], false);
+
+      // Chart 2 — per panel sorted by label/id
+      const sorted = vals.slice().sort((a,b) => {
+        const la = a.panel || a.barcode || a.addr || '';
+        const lb = b.panel || b.barcode || b.addr || '';
+        return la.localeCompare(lb, undefined, { numeric: true });
+      });
+      const cats   = sorted.map(d => d.panel || d.barcode || d.addr || '?');
+      const watts  = sorted.map(d => d.watt || 0);
+      const colors = watts.map(w => barColor(w));
+      chartPanels.updateOptions({ xaxis: { categories: cats }, colors }, false, false);
+      chartPanels.updateSeries([{ name: 'W', data: watts }], false);
+
+      // Adjust bar chart height based on number of panels
+      const h = Math.max(160, sorted.length * 28 + 40);
+      if (document.getElementById('chart-panels').style.height !== h + 'px') {
+        chartPanels.updateOptions({ chart: { height: h } }, false, false);
+        chartPower.updateOptions({ chart: { height: h } }, false, false);
+      }
+    }
   </script>
 </body>
 </html>

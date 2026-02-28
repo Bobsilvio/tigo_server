@@ -10,11 +10,6 @@
 #include <time.h>
 
 #define MAX_SIZE_BYTES (300 * 1024) // 300 KB
-#define MAX_LOG_FILE_SIZE 1100000  // in byte
-#define MAX_SPIFFS_USAGE 1250000  // soglia oltre cui inizia a cancellare
-
-unsigned long lastLogTime = 0;
-const unsigned long logInterval = 30000; // 30 seconds
 
 const char* hostname = "TigoServer";
 const char* ssid = ""; //SSID
@@ -38,9 +33,9 @@ char* address;
 void setupNTP();
 void setupWebserver();
 void loadNodeTable();
-void loopLogging();
-bool allBarcodesKnown();
 void saveNodeTable();
+void loadPanelMap();
+void savePanelMap();
 void handleRoot();
 String generateFileListHTML();
 void handleFileUpload();
@@ -79,6 +74,14 @@ struct frame09Data {
 };
 frame09Data frame09[100];
 int frame09_count = 0;
+
+// ── Panel Map: associazione manuale longAddress → etichetta (es. "A4") ──
+struct PanelMapEntry {
+  String longAddress;  // es. "04C05B4000B1A688"
+  String label;        // es. "A4"
+};
+PanelMapEntry panelMap[150];
+int panelMap_count = 0;
 
 WiFiClient espClient;
 AsyncWebServer server(80);
@@ -146,22 +149,41 @@ void generateCRCTable() {
 }
 
 // Function to compute CRC-16/CCITT using the precomputed table
+// Initial value 0x8408 is intentional per Tigo protocol (non-standard)
 uint16_t computeCRC16CCITT(const uint8_t* data, size_t length) {
   uint16_t crc = 0x8408;  // Initial value
   for (size_t i = 0; i < length; i++) {
     uint8_t index = (crc ^ data[i]) & 0xFF;
     crc = (crc >> 8) ^ CRC_TABLE[index];
   }
-  crc = (crc >> 8) | (crc << 8);
-  return crc;  // Final XOR (inverted CRC as per CRC-16/CCITT spec)
+  return crc;
 }
 
 bool verifyChecksum(const String& frame) {
   if (frame.length() < 2) return false;
-  String checksumStr = frame.substring(frame.length() - 2);
-  uint16_t extractedChecksum = (checksumStr[0] << 8) | checksumStr[1];
-  uint16_t computedChecksum = computeCRC16CCITT((const uint8_t*)frame.c_str(), frame.length() - 2);
+  // Checksum is stored little-endian in the frame (e.g. 0x85A3 is stored as bytes A3 85)
+  const uint8_t* raw = (const uint8_t*)frame.c_str();
+  uint16_t extractedChecksum = (uint16_t)raw[frame.length() - 2]
+                             | ((uint16_t)raw[frame.length() - 1] << 8);
+  uint16_t computedChecksum = computeCRC16CCITT(raw, frame.length() - 2);
   return extractedChecksum == computedChecksum;
+}
+
+// Restituisce il longAddress di un dispositivo tramite il suo addr corto (via NodeTable)
+String getLongAddress(const String& addr) {
+  for (int i = 0; i < NodeTable_count; i++) {
+    if (NodeTable[i].addr == addr) return NodeTable[i].longAddress;
+  }
+  return "";
+}
+
+// Restituisce l'etichetta pannello per un dato longAddress ("" se non mappato)
+String getPanelLabel(const String& longAddress) {
+  if (longAddress == "") return "";
+  for (int i = 0; i < panelMap_count; i++) {
+    if (panelMap[i].longAddress == longAddress) return panelMap[i].label;
+  }
+  return "";
 }
 
 void WebsocketSend(bool send_all = false) {
@@ -171,7 +193,11 @@ void WebsocketSend(bool send_all = false) {
     if (devices[i].changed || send_all == true) {
       DeviceData& d = devices[i];
       JsonObject obj = array.createNestedObject();
-      obj["id"] = d.barcode != "" ? d.barcode : "mod#" + String(i + 1);
+      String longAddr = getLongAddress(d.addr);
+      String label    = getPanelLabel(longAddr);
+      obj["id"]       = label != "" ? label : (d.barcode != "" ? d.barcode : "mod#" + String(i + 1));
+      obj["panel"]    = label;      // stringa vuota se non mappato
+      obj["longaddr"] = longAddr;   // utile per la pagina /panels
       obj["watt"] = round(d.voltage_out * d.current_in);
       obj["vin"] = d.voltage_in;
       obj["vout"] = d.voltage_out;
@@ -229,6 +255,7 @@ void setup() {
   ArduinoOTA.begin();
   SPIFFS.begin(true);
   loadNodeTable();
+  loadPanelMap();
 }
 
 void loop() {
@@ -240,12 +267,6 @@ void loop() {
 
   static String incomingData = "";
   static bool frameStarted = false;
-  static bool barcodeSaved = false;
-
-  if (millis() - lastLogTime >= logInterval) {
-    loopLogging();  // funzione esistente che scrive il log
-    lastLogTime = millis();
-  }
 
   if(WiFi.status() == WL_CONNECTED){
     if(!MQTT_Client.connected()){
@@ -295,18 +316,52 @@ while (Serial1.available()) {
             WebSerial.println("Buffer zu klein!");
         }
     }
-    loopLogging();
-
-    static bool barcodeSaved = false;
-    if (!barcodeSaved && allBarcodesKnown() && NodeTable_count >= deviceCount) {
+    // Auto-save NodeTable se modificata (debounce 30 secondi)
+    static unsigned long lastAutoSave = 0;
+    if (NodeTable_changed && (millis() - lastAutoSave > 30000)) {
+      lastAutoSave = millis();
       saveNodeTable();
       NodeTable_changed = false;
-      barcodeSaved = true;
+      WebSerial.println("✅ NodeTable salvata automaticamente.");
       Serial.println("NodeTable saved automatically.");
     }
   }
 }
 
+
+void loadPanelMap() {
+  File file = SPIFFS.open("/panel_map.json", "r");
+  if (!file) { Serial.println("No panel_map.json, starting empty."); return; }
+  StaticJsonDocument<4096> doc;
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) { Serial.println("panel_map.json: parse error"); return; }
+  panelMap_count = 0;
+  for (JsonObject obj : doc.as<JsonArray>()) {
+    if (panelMap_count < 150) {
+      panelMap[panelMap_count].longAddress = obj["longAddress"].as<String>();
+      panelMap[panelMap_count].label       = obj["label"].as<String>();
+      panelMap_count++;
+    }
+  }
+  Serial.printf("PanelMap caricata: %d voci\n", panelMap_count);
+}
+
+void savePanelMap() {
+  File file = SPIFFS.open("/panel_map.json", FILE_WRITE);
+  if (!file) { Serial.println("Impossibile scrivere panel_map.json"); return; }
+  StaticJsonDocument<4096> doc;
+  JsonArray arr = doc.to<JsonArray>();
+  for (int i = 0; i < panelMap_count; i++) {
+    JsonObject obj = arr.createNestedObject();
+    obj["longAddress"] = panelMap[i].longAddress;
+    obj["label"]       = panelMap[i].label;
+  }
+  serializeJson(doc, file);
+  file.close();
+  Serial.printf("PanelMap salvata: %d voci\n", panelMap_count);
+  WebSerial.println("✅ PanelMap salvata.");
+}
 
 void loadNodeTable() {
   File file = SPIFFS.open("/nodetable.json", "r");
@@ -326,7 +381,8 @@ void loadNodeTable() {
     if (NodeTable_count < 100) {
       NodeTable[NodeTable_count].longAddress = obj["longAddress"].as<String>();
       NodeTable[NodeTable_count].addr = obj["addr"].as<String>();
-      NodeTable[NodeTable_count].checksum = computeTigoCRC4(obj["addr"].as<String>().c_str());
+      // CRC4 is computed over the full 64-bit long address, not the short addr
+      NodeTable[NodeTable_count].checksum = computeTigoCRC4(obj["longAddress"].as<String>().c_str());
       NodeTable_count++;
       bool found = false;
       for (int i = 0; i < deviceCount; i++) {
@@ -415,13 +471,15 @@ String frameToHexString(const String& frame) {
 }
 
 void process09frame(String frame){
-  String addr = frame.substring(14,18);
-  String node_id = frame.substring(18,22);
-  String barcode = frame.substring(40,46);
+  // Topology report: header is 14 hex chars (type+PVnodeID+shortAddr+DSN+len)
+  // Payload layout: shortAddr(4) + PVnodeID(4) + nextHop(4) + ???(4) + longAddr(16) + RSSI(2)
+  String addr    = frame.substring(14, 18); // short address of node
+  String node_id = frame.substring(18, 22); // PV node ID of node
+  String barcode = frame.substring(30, 46); // full 64-bit long address (8 bytes = 16 hex chars)
   bool found = false;
   for(int i=0; i < frame09_count; i++){
-    if (frame09[i].barcode = barcode){
-      //udate existing
+    if (frame09[i].barcode == barcode){ // == not =
+      //update existing
       frame09[i].node_id = node_id;
       frame09[i].addr = addr;
       found = true;
@@ -490,9 +548,11 @@ void processPowerFrame(String frame) {
   int current_in_raw = strtol(frame.substring(22, 25).c_str(), nullptr, 16);  // 2.5 bytes (5 nibbles)
   float current_in = current_in_raw * 0.005;  // Scale factor is 0.005
 
-  // Temperature (2 bytes): Convert from hex to integer, then scale by 0.1
+  // Temperature (12 bit, two's complement): scale by 0.1°C/unit
+  // Sign-extend 12-bit value: if bit 11 is set, temperature is negative
   int temperature_raw = strtol(frame.substring(25, 28).c_str(), nullptr, 16);
-  float temperature = temperature_raw * 0.1;  // Scale factor is 0.1
+  if (temperature_raw & 0x800) temperature_raw |= 0xFFFFF000; // sign extend to 32-bit
+  float temperature = temperature_raw * 0.1;
 
   // Slot Counter (4 bytes): Keep this in hex for display
   String slot_counter_value = frame.substring(34, 38);  // 4 bytes (8 hex digits)
@@ -709,43 +769,6 @@ String removeEscapeSequences(const String& frame) {
     return result;
 }
 
-String getDateFilename() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return "/log_unknown.json";
-  char buf[32];
-  strftime(buf, sizeof(buf), "/log_%Y-%m-%d.json", &timeinfo);
-  return String(buf);
-}
-
-String getTimestampISO8601() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return "1970-01-01T00:00:00";
-  char buf[25];
-  strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &timeinfo);
-  return String(buf);
-}
-
-void logAllDevices() {
-  String filename = getDateFilename();
-  File file = SPIFFS.open(filename, FILE_APPEND);
-  if (!file) return;
-  String timestamp = getTimestampISO8601();
-  for (int i = 0; i < deviceCount; i++) {
-    int watt = round(devices[i].voltage_out * devices[i].current_in);
-    String line = "{";
-    line += "\"ts\":\"" + timestamp + "\",";
-    line += "\"barcode\":\"" + devices[i].barcode + "\",";
-    line += "\"vin\":" + String(devices[i].voltage_in, 2) + ",";
-    line += "\"vout\":" + String(devices[i].voltage_out, 2) + ",";
-    line += "\"amp\":" + String(devices[i].current_in, 2) + ",";
-    line += "\"watt\":" + String(watt) + ",";
-    line += "\"temp\":" + String(devices[i].temperature, 1);
-    line += "}\n";
-    file.print(line);
-  }
-  file.close();
-}
-
 // Inserire nel setup() dopo la connessione WiFi:
 void setupNTP() {
   setenv("TZ", "CET-1CEST,M3.5.0/2,M10.5.0/3", 1);
@@ -758,103 +781,4 @@ void setupNTP() {
   }
 }
 
-void loopLogging() {
-    static unsigned long lastLogTime = 0;
-    unsigned long currentMillis = millis();
-    if (currentMillis - lastLogTime < 30000) return; // ogni 30s
-    lastLogTime = currentMillis;
 
-    String filename = getDateFilename(); // log del giorno
-    ensureFreeSpaceExceptToday(filename); // rimuove i log vecchi
-
-    File logFile = SPIFFS.open(filename, FILE_APPEND);
-    if (!logFile) {
-        Serial.println("❌ Non posso aprire il file log!");
-        return;
-    }
-
-    const size_t MAX_LOG_SIZE = 1100000; // 1.1 MB massimo
-    if (logFile.size() > MAX_LOG_SIZE) {
-        logFile.close();
-        Serial.println("📦 File log troppo grande, non scrivo più oggi.");
-        return;
-    }
-
-    String timestamp = getTimestampISO8601();
-    for (int i = 0; i < deviceCount; i++) {
-        int watt = round(devices[i].voltage_out * devices[i].current_in);
-        String line = "{";
-        line += "\"ts\":\"" + timestamp + "\",";
-        line += "\"barcode\":\"" + devices[i].barcode + "\",";
-        line += "\"vin\":" + String(devices[i].voltage_in, 2) + ",";
-        line += "\"vout\":" + String(devices[i].voltage_out, 2) + ",";
-        line += "\"amp\":" + String(devices[i].current_in, 2) + ",";
-        line += "\"watt\":" + String(watt) + ",";
-        line += "\"temp\":" + String(devices[i].temperature, 1);
-        line += "}\n";
-        logFile.print(line);
-    }
-
-    logFile.close();
-}
-
-
-
-
-bool allBarcodesKnown() {
-  for (int i = 0; i < deviceCount; i++) {
-    if (devices[i].barcode.length() < 5) {
-      return false;
-    }
-  }
-  return true;
-}
-
-void ensureFreeSpaceExceptToday(String todayFilename) {
-    if (!SPIFFS.begin(true)) {
-        Serial.println("❌ SPIFFS non montato!");
-        return;
-    }
-
-    File root = SPIFFS.open("/");
-    if (!root) return;
-
-    File entry;
-    while (entry = root.openNextFile()) {
-        String name = entry.name();
-        if (name.startsWith("/log_") && name.endsWith(".json") && name != todayFilename) {
-            SPIFFS.remove(name);
-            Serial.println("🗑️ Cancellato log vecchio: " + name);
-        }
-    }
-}
-
-void ensureFreeSpace() {
-  size_t used = SPIFFS.usedBytes();
-  size_t total = SPIFFS.totalBytes();
-  if ((total - used) < 10 * 1024) { // meno di 10 KB liberi
-    File root = SPIFFS.open("/");
-    String oldestLog;
-    time_t oldestTime = time(nullptr);
-
-    File file = root.openNextFile();
-    while (file) {
-      String name = file.name();
-      if (name.startsWith("/log_") && name.endsWith(".json")) {
-        struct stat file_stat;
-        if (!stat(("/spiffs" + name).c_str(), &file_stat)) {
-          if (file_stat.st_mtime < oldestTime) {
-            oldestTime = file_stat.st_mtime;
-            oldestLog = name;
-          }
-        }
-      }
-      file = root.openNextFile();
-    }
-
-    if (oldestLog.length()) {
-      SPIFFS.remove(oldestLog);
-      Serial.println("🗑️ Cancellato file log più vecchio: " + oldestLog);
-    }
-  }
-}

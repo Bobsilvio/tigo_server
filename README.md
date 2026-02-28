@@ -1,176 +1,163 @@
 # Tigo RS485 ESP32 Monitor
 
-This project is an enhanced Arduino-based ESP32 sketch to read and log Tigo solar optimizer data (TAP ↔ CCA communication) using RS485.
+Monitor in tempo reale per ottimizzatori solari Tigo, basato su ESP32.  
+Legge il bus RS-485 (protocollo TAP) e fornisce una dashboard web, WebSocket e persistenza su SPIFFS.
 
-<img src="images/home.png" alt="esp32" width="1000"/>
-<img src="images/logviewer.png" alt="esp32" width="1000"/>
-<img src="images/spiffs.png" alt="esp32" width="1000"/>
-
----
-
-## 🛠️ Hardware Requirements
-
-- **ESP32 / ESP32-S3** (with enough flash for SPIFFS)
-- **TTL to RS485 converter** (e.g., MAX485 or similar)
-- **5V regulator** if powered directly from the RS485 bus
+<img src="images/home.png" alt="dashboard" width="1000"/>
+<img src="images/spiffs.png" alt="spiffs" width="1000"/>
 
 ---
 
-## ⚙️ Features
+## 🛠️ Hardware
 
-- 🔌 **Reads data from Tigo TAP/CCA RS485 bus**
-- 🔍 **Parses frames including power data (0x31) and barcodes (0x09)**
-- 🌐 **Built-in WebServer**:
-  - `/` – Live view of all PV modules (with WebSocket)
-  - `/debug` – Raw data view (voltage, current, RSSI, etc.)
-  - `/spiffs` – File manager (upload/download/delete logs or config)
-  - `/logs` – Interactive log viewer (by timestamp)
-- 🧠 **Auto barcode detection** via 0x09 frames
-- 💾 **Logs to SPIFFS** every 30 s (capped to 7 files)
-- 🕒 **NTP sync** for accurate timestamps
+| Componente | Note |
+|---|---|
+| **ESP32 / ESP32-S3** | Flash minimo da 4 MB con partizione SPIFFS |
+| **Convertitore TTL→RS485** | MAX485 o simile |
+| **Regolatore 5 V** | Se alimentato dal bus RS-485 |
 
 ---
 
-## 📂 SPIFFS File System
+## ⚙️ Funzionalità
 
-- **nodetable.json** – Keeps module `addr` to `barcode` mapping  
-- **log_YYYY-MM-DD.json** – Daily logs with all module values  
-- **index.html** – Optional: Custom UI served on `/`
+- 📡 **Lettura bus RS-485** (Tigo TAP/CCA, 38400 baud 8N1)
+- 🔍 **Parsing frame**: potenza (0x31), topologia (0x09), NodeTable (0x27)
+- 🌐 **WebServer integrato**:
+  - `/` – Dashboard live con grafici (ApexCharts) e card per modulo
+  - `/debug` – Tabella raw (tensione, corrente, temperatura, RSSI, …)
+  - `/panels` – Mappatura manuale longAddress → etichetta (es. A4)
+  - `/spiffs` – File manager (upload / download / elimina file SPIFFS)
+- 🔌 **WebSocket `/ws`** — aggiornamento real-time; payload per modulo:
+  ```json
+  {
+    "id":       "A4",
+    "panel":    "A4",
+    "longaddr": "04C05B4000B1A688",
+    "barcode":  "04C05B4000B1A688",
+    "addr":     "001A",
+    "watt":     250,
+    "vin":      34.70,
+    "vout":     34.40,
+    "amp":      6.94,
+    "temp":     34.4,
+    "rssi":     126
+  }
+  ```
+- 💾 **NodeTable** — salvataggio automatico con debounce 30 s (`/nodetable.json`)
+- 🔖 **Panel Map** — associazione persistente longAddress → etichetta (`/panel_map.json`)
+- 🕒 **NTP sync** — orario preciso alla sincronizzazione
+- 🔁 **OTA** — aggiornamento firmware via rete
+- 📊 **Dashboard grafica**:
+  - Grafico area — potenza totale nel tempo (ultimi 60 campioni, in-memory)
+  - Grafico a barre orizzontali — potenza istantanea per pannello, colorato W→verde
+  - Card per ogni modulo con barra di progresso, Vin/Vout, corrente, temperatura, RSSI
 
 ---
 
-## 🔄 Automatic NodeTable Save
+## 📂 File SPIFFS
 
-Once all modules are matched with barcodes (via 0x09 or `/debug`),  
-the mapping is auto-saved to `nodetable.json`.
-
----
-
-## 🧪 Local Debug
-
-Use WebSerial or `/debug` to inspect live parsed values.
+| File | Descrizione |
+|---|---|
+| `index.html` | Dashboard web |
+| `nodetable.json` | Mapping addr corto ↔ longAddress (auto-generato) |
+| `panel_map.json` | Mapping longAddress ↔ etichetta pannello (gestito da `/panels`) |
 
 ---
 
-## 📡 MQTT
+## 🔖 Mappatura pannelli
 
-Optionally sends a **startup message** (not real-time data) to a broker.
-
----
-
-## 🧾 Log Viewer
-
-The `/logs` interface lets you select a log file and timestamp, and view  
-all module data from that instant.
+Vai su `/panels`: ogni riga mostra il longAddress del modulo (es. `04C05B4000B1A688`).  
+Scrivi l'etichetta (es. `A4`) e clicca **Salva**.  
+Da quel momento il WebSocket trasmette `"panel": "A4"` e `"id": "A4"` per quel modulo.  
+Il longAddress rimane sempre disponibile nei campi `barcode` e `longaddr`.
 
 ---
 
-## 🧰 Installation Guide (Arduino IDE)
+## 🔄 Salvataggio automatico NodeTable
 
-### 🔧 1. Prerequisites
-- Install **Arduino IDE 2.x**
-- Add the **ESP32 board support**:  
-  *File → Impostazioni → URL aggiuntive per il Gestore schede*  
+La `loop()` controlla ogni ciclo: se `NodeTable_changed == true` e sono passati ≥ 30 s  
+dall'ultimo salvataggio → chiama `saveNodeTable()` e resetta il flag.  
+Il salvataggio manuale è disponibile su `/debug` → bottone **Salva NodeTable ora**.
+
+---
+
+## 🧰 Installazione (Arduino IDE)
+
+### 1. Prerequisiti
+- **Arduino IDE 2.x**
+- Supporto schede ESP32:  
+  *File → Preferenze → URL aggiuntivi*:
   ```
   https://espressif.github.io/arduino-esp32/package_esp32_index.json
   ```
-  Then: *Strumenti → Scheda → Gestore schede → cerca “esp32” → Installa*
+  Poi: *Strumenti → Scheda → Gestore schede → "esp32" → Installa*
 
-### 📦 2. Download the project
-1. From this repository, click **Code → Download ZIP**
-2. Extract it to your Arduino folder, e.g.  
-   `Documents/Arduino/tigo_server/`
-3. Open `tigo_server.ino` in the Arduino IDE  
-   (the folder name must match the `.ino` file name)
+### 2. Librerie richieste
+Installa via *Sketch → Includi libreria → Gestisci librerie*:
+- **ArduinoJson** (Benoit Blanchon)
+- **ESPAsyncWebServer** + **AsyncTCP**
+- **PubSubClient** (MQTT)
+- **WebSerial**
 
-### ⚙️ 3. Board configuration
-From *Strumenti*:
-- **Board:** `ESP32 Dev Module` (or your ESP32 S3 variant)
-- **Flash Frequency:** 80 MHz  
-- **Upload Speed:** 921600 baud (or 115200 if errors occur)  
-- **Partition Scheme:** `No OTA (1MB APP / 3MB SPIFFS)`  
-- **Port:** choose your ESP32 serial port  
+### 3. Configurazione scheda
+*Strumenti*:
+- **Board:** `ESP32 Dev Module` (o variante S3)
+- **Partition Scheme:** `No OTA (1MB APP / 3MB SPIFFS)`
+- **Upload Speed:** 921600
 
-### 📚 4. Required libraries
-Usually included with ESP32 core, but verify the following:
-- `WiFi.h`
-- `WebServer.h`
-- `WebSocketsServer.h`
-- `SPIFFS.h`
-- `ArduinoJson` → install via *Sketch → Includi Libreria → Gestisci librerie → cerca "ArduinoJson"*
-
-### 🌐 5. Wi-Fi configuration
-In `config.h` (or in the main sketch):
+### 4. Credenziali Wi-Fi
+Nel file `TigoServer.ino` (in cima):
 ```cpp
-#define WIFI_SSID "YourWiFi"
-#define WIFI_PASS "YourPassword"
+const char* ssid     = "TuaReteWiFi";
+const char* password = "TuaPassword";
 ```
-If left empty, the ESP32 will start its own AP (e.g. `TigoServer_AP`)  
-and open a captive portal for Wi-Fi setup.
 
-### 🚀 6. Upload the firmware
-1. Connect the ESP32 via USB  
-2. Click **→ Carica**  
-3. Open *Monitor Seriale* (115200 baud) to view logs:
-   ```
-   Connecting to WiFi...
-   WiFi connected: 192.168.1.xxx
-   Starting WebServer on port 80...
-   ```
+### 5. Flash firmware
+1. Collega ESP32 via USB
+2. Clicca **→ Carica**
+3. Apri *Monitor Seriale* (115200 baud)
 
-### 💾 7. Upload SPIFFS data (optional)
-If you have a `/data` folder (web files):
-1. Install **ESP32 Sketch Data Upload** plugin  
-   → [https://github.com/me-no-dev/arduino-esp32fs-plugin](https://github.com/me-no-dev/arduino-esp32fs-plugin)
-2. Copy it to your Arduino `tools/` directory  
-3. Restart Arduino IDE  
-4. Run *Strumenti → ESP32 Sketch Data Upload*
+### 6. Carica i file SPIFFS
+Installa il plugin **ESP32 Sketch Data Upload**:  
+→ [https://github.com/me-no-dev/arduino-esp32fs-plugin](https://github.com/me-no-dev/arduino-esp32fs-plugin)  
+Poi: *Strumenti → ESP32 Sketch Data Upload*
 
-### 🌍 8. First access
-- Find the IP in the Serial Monitor or your router DHCP table  
-- Open in browser:  
-  ```
-  http://<ESP32_IP>
-  ```
-You’ll see:
-- Live dashboard of PV modules  
-- `/debug` for raw frames  
-- `/spiffs` file manager  
-- `/logs` for historical data  
-
-### 🧩 9. NodeTable and data logs
-The ESP32 automatically detects barcodes (frame 0x09) and saves them in  
-`nodetable.json`. Logs are rotated daily in SPIFFS.
+### 7. Primo accesso
+Trova l'IP in Serial Monitor o nel router DHCP:
+```
+http://<IP_ESP32>
+```
+- `/` — Dashboard + grafici
+- `/debug` — Dati raw + NodeTable
+- `/panels` — Mappatura etichette
+- `/spiffs` — File manager
 
 ---
 
-## ⚡ Wiring overview
+## ⚡ Schema di collegamento
 
-<img src="images/esp32-rs485.png" alt="esp32" width="400"/>
+<img src="images/esp32-rs485.png" alt="wiring" width="400"/>
 <img src="images/stepdown-5v.png" alt="stepdown" width="400"/>
 
-**Basic connections:**
-| RS-485 Module | ESP32 Pin | Note |
-|----------------|------------|------|
-| RO → RX        | GPIO 16 (default) | RS-485 → ESP32 |
-| DI ← TX        | GPIO 17 (default) | ESP32 → RS-485 |
-| RE/DE          | LOW (receive-only) | or tie HIGH for TX |
-| A/B lines      | Parallel to TAP ↔ CCA bus |
-| 5 V / GND      | Shared supply and ground |
+| RS-485 | ESP32 | Note |
+|---|---|---|
+| RO → RX | GPIO 16 | RS-485 → ESP32 |
+| DI ← TX | GPIO 17 | ESP32 → RS-485 |
+| RE/DE | GND (LOW) | Modalità solo ricezione |
+| A / B | Bus TAP ↔ CCA | In parallelo |
+| 5 V / GND | Alimentazione condivisa | |
 
 ---
 
-## 📎 Credits
+## 📎 Crediti
 
-- Based on the reverse-engineering work by [willglynn/taptap](https://github.com/willglynn/taptap)
-- Original project by [tictactom/tigo_server](https://github.com/tictactom/tigo_server)
-- This fork expands it into a full local monitoring platform with logs, real-time view, and persistence.
+- Reverse engineering protocollo: [willglynn/taptap](https://github.com/willglynn/taptap)
+- Progetto originale: [tictactom/tigo_server](https://github.com/tictactom/tigo_server)
+- Questa fork aggiunge dashboard grafica, panel mapping, NodeTable persistente, pagine dark-theme.
 
 ---
 
-## 🔓 License
+## 🔓 Licenza
 
-MIT — feel free to adapt for your system.
+MIT — libero adattamento per il proprio impianto.
 
-Maintained by the community.  
-Suggestions and improvements welcome.
