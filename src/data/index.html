@@ -238,6 +238,7 @@
       margin-bottom: 8px;
     }
   </style>
+  <!-- ApexCharts da CDN; se non disponibile (LAN senza internet) le chart vengono nascoste -->
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 <body>
@@ -460,24 +461,41 @@
       tooltip: { ...TOOLTIP_DARK, x: { format: 'HH:mm:ss' } },
       dataLabels: { enabled: false }
     };
-    const chartPower = new ApexCharts(document.getElementById('chart-power'), chartPowerOpts);
-    chartPower.render();
 
-    // --- Chart 2: per-panel bar chart ---
-    const chartPanelsOpts = {
-      chart: { ...CHART_DARK, type: 'bar', height: 180 },
-      series: [{ name: 'W', data: [] }],
-      colors: ['#42a5f5'],
-      plotOptions: { bar: { horizontal: true, barHeight: '65%', borderRadius: 4, distributed: true } },
-      legend: { show: false },
-      xaxis: { labels: { style: { colors: '#555', fontSize: '10px' }, formatter: v => v + ' W' }, min: 0 },
-      yaxis: { labels: { style: { colors: '#999', fontSize: '11px', fontWeight: 600 } } },
-      grid: GRID_OPTS,
-      tooltip: { ...TOOLTIP_DARK, y: { formatter: v => v + ' W' } },
-      dataLabels: { enabled: false }
-    };
-    const chartPanels = new ApexCharts(document.getElementById('chart-panels'), chartPanelsOpts);
-    chartPanels.render();
+    // Fix #3: inizializza le chart solo se ApexCharts è disponibile (CDN offline → degradazione graceful)
+    let chartPower  = null;
+    let chartPanels = null;
+
+    if (typeof ApexCharts !== 'undefined') {
+      chartPower = new ApexCharts(document.getElementById('chart-power'), chartPowerOpts);
+      chartPower.render();
+
+      // --- Chart 2: per-panel bar chart ---
+      const chartPanelsOpts = {
+        chart: { ...CHART_DARK, type: 'bar', height: 180 },
+        series: [{ name: 'W', data: [] }],
+        colors: ['#42a5f5'],
+        plotOptions: { bar: { horizontal: true, barHeight: '65%', borderRadius: 4, distributed: true } },
+        legend: { show: false },
+        xaxis: { labels: { style: { colors: '#555', fontSize: '10px' }, formatter: v => v + ' W' }, min: 0 },
+        yaxis: { labels: { style: { colors: '#999', fontSize: '11px', fontWeight: 600 } } },
+        grid: GRID_OPTS,
+        tooltip: { ...TOOLTIP_DARK, y: { formatter: v => v + ' W' } },
+        dataLabels: { enabled: false }
+      };
+      chartPanels = new ApexCharts(document.getElementById('chart-panels'), chartPanelsOpts);
+      chartPanels.render();
+    } else {
+      // CDN non raggiungibile: nasconde la sezione chart per evitare elementi vuoti
+      const row = document.getElementById('charts-row');
+      if (row) {
+        row.style.display = 'none';
+        const msg = document.createElement('p');
+        msg.style.cssText = 'color:var(--muted);font-size:.8rem;margin-top:8px';
+        msg.textContent = '⚠ Grafici non disponibili (libreria ApexCharts non caricata).';
+        row.parentNode.insertBefore(msg, row.nextSibling);
+      }
+    }
 
     // helper: watt → colour string for bars
     function barColor(w) {
@@ -488,6 +506,7 @@
 
     // called after every WS message
     function updateCharts() {
+      if (!chartPower || !chartPanels) return; // Fix #3: chart non disponibili
       // Chart 1 — total power point
       const vals = Object.values(data_map);
       const tot = vals.reduce((s,d) => s + (d.watt||0), 0);

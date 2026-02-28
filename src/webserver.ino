@@ -1,3 +1,40 @@
+// Escape HTML-special chars per prevenire XSS (Fix #8/#9/#10)
+String htmlEscape(const String& s) {
+  String out;
+  out.reserve(s.length() + 16);
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s.charAt(i);
+    switch (c) {
+      case '&':  out += "&amp;";  break;
+      case '<':  out += "&lt;";   break;
+      case '>':  out += "&gt;";   break;
+      case '"':  out += "&quot;"; break;
+      case '\'': out += "&#39;";  break;
+      default:   out += c;        break;
+    }
+  }
+  return out;
+}
+
+// Valida che una stringa contenga solo caratteri sicuri per etichette/nomi file
+bool isSafeLabel(const String& s) {
+  if (s.length() == 0 || s.length() > 20) return false;
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s.charAt(i);
+    if (!isalnum(c) && c != '-' && c != '_' && c != '.' && c != ' ') return false;
+  }
+  return true;
+}
+
+bool isSafeFilename(const String& s) {
+  if (s.length() == 0 || s.length() > 64) return false;
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s.charAt(i);
+    if (!isalnum(c) && c != '-' && c != '_' && c != '.' && c != '/') return false;
+  }
+  return true;
+}
+
 void setupWebserver() {
   handleDebugPage();
   handlePanelsPage();
@@ -16,6 +53,11 @@ void setupWebserver() {
       String la  = request->getParam("longAddress", true)->value();
       String lbl = request->getParam("label", true)->value();
       la.trim(); lbl.trim();
+      // Fix #9: valida che label contenga solo caratteri sicuri
+      if (!isSafeLabel(lbl)) {
+        request->send(400, "text/plain", "Etichetta non valida: usare solo lettere, cifre, - _ . spazio (max 20 char)");
+        return;
+      }
       // Aggiorna se esiste già, altrimenti aggiungi
       bool found = false;
       for (int i = 0; i < panelMap_count; i++) {
@@ -69,42 +111,20 @@ void setupWebserver() {
     }
   });
 
-  // Download file
+  // Download file — Fix #1: usa request->send(SPIFFS) che gestisce il ciclo
+  // di vita del File internamente, senza rischi di memory leak in caso di
+  // disconnessione anticipata del client.
   server.on("/download", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (!request->hasParam("file")) {
       request->send(400, "text/plain", "Missing parameter: file");
       return;
     }
-
     String filePath = request->getParam("file")->value();
     if (!SPIFFS.exists(filePath)) {
       request->send(404, "text/plain", "File not found");
       return;
     }
-
-    File *file = new File(SPIFFS.open(filePath, "r"));
-    if (!*file) {
-      request->send(500, "text/plain", "Failed to open file");
-      delete file;
-      return;
-    }
-
-    AsyncWebServerResponse *response = request->beginResponse(
-      "application/octet-stream",
-      file->size(),
-      [file](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-        size_t readLen = file->read(buffer, maxLen);
-        if (readLen == 0) {
-          file->close();
-          delete file;
-        }
-        return readLen;
-      }
-    );
-
-    String filename = filePath.substring(filePath.lastIndexOf('/') + 1);
-    response->addHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-    request->send(response);
+    request->send(SPIFFS, filePath, "application/octet-stream", true /*download*/);
   });
 
   // Reboot
@@ -217,14 +237,15 @@ String generateFileListHTML() {
   while (file) {
     hasFiles = true;
     String fname = fixPath(file.name());
+    String fnameEsc = htmlEscape(fname); // Fix #8: escapa per prevenire XSS
     size_t fsize  = file.size();
     html += "<tr>";
-    html += "<td class='fname'>" + fname + "</td>";
+    html += "<td class='fname'>" + fnameEsc + "</td>";
     html += "<td class='fsize'>" + String(fsize) + " B &nbsp;(" + String(fsize / 1024.0, 1) + " KB)</td>";
     html += "<td style='white-space:nowrap'>"
             "<a class='btn btn-dl' href='/download?file=" + urlEncode(fname) + "'>⬇ Download</a> "
             "<a class='btn btn-del' href='/delete?file=" + urlEncode(fname) + "' "
-            "onclick=\"return confirm('Eliminare &quot;" + fname + "&quot;?')\">✕ Elimina</a>";
+            "onclick=\"return confirm('Eliminare &quot;" + fnameEsc + "&quot;?')\">&#x2715; Elimina</a>";
     html += "</td></tr>";
     file = root.openNextFile();
   }
@@ -350,9 +371,11 @@ void handlePanelsPage() {
     } else {
       h += "<table><thead><tr><th>Etichetta</th><th>Long Address</th><th></th></tr></thead><tbody>";
       for (int i = 0; i < panelMap_count; i++) {
+        String lblEsc = htmlEscape(panelMap[i].label);      // Fix #9
+        String laEsc  = htmlEscape(panelMap[i].longAddress); // Fix #9
         h += "<tr>";
-        h += "<td class='lbl'>" + panelMap[i].label + "</td>";
-        h += "<td class='la'>" + panelMap[i].longAddress + "</td>";
+        h += "<td class='lbl'>" + lblEsc + "</td>";
+        h += "<td class='la'>" + laEsc + "</td>";
         h += "<td><a class='btn btn-del' href='/panel_delete?longAddress=" + urlEncode(panelMap[i].longAddress) + "' "
              "onclick=\"return confirm('Rimuovere?')\">×</a></td>";
         h += "</tr>";
@@ -450,7 +473,7 @@ void handleDebugPage() {
       String label = getPanelLabel(devices[i].addr);
       h += "<tr>";
       h += "<td class='hl-muted'>" + String(ii+1) + "</td>";
-      h += "<td class='hl-green'>" + (label.isEmpty() ? "<span class='hl-muted'>—</span>" : label) + "</td>";
+      h += "<td class='hl-green'>" + (label.isEmpty() ? "<span class='hl-muted'>—</span>" : htmlEscape(label)) + "</td>"; // Fix #10
       h += "<td>" + devices[i].pv_node_id + "</td>";
       h += "<td class='hl-blue'>" + devices[i].addr + "</td>";
       h += "<td>" + String(devices[i].voltage_in, 2)  + " V</td>";
@@ -503,6 +526,18 @@ void handleFileUpload() {
       if (!index) {
         spaceChecked = false;
         Serial.printf("Upload beginnt: %s\n", filename.c_str());
+        // Fix #8: valida il nome file — ammetti solo caratteri alfanumerici e . - _
+        for (size_t ci = 0; ci < filename.length(); ci++) {
+          char c = filename.charAt(ci);
+          if (!isalnum(c) && c != '-' && c != '_' && c != '.') {
+            Serial.println("❌ Nome file non valido.");
+            return;
+          }
+        }
+        if (filename.length() > 64) {
+          Serial.println("❌ Nome file troppo lungo.");
+          return;
+        }
         String path = "/" + filename;
         if (SPIFFS.exists(path)) {
           SPIFFS.remove(path);

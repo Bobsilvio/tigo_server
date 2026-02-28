@@ -9,9 +9,8 @@
 #include <ArduinoJson.h>
 #include <time.h>
 
-#define MAX_SIZE_BYTES (300 * 1024) // 300 KB
-
 const char* hostname = "TigoServer";
+const char* TZ_STRING = "CET-1CEST,M3.5.0/2,M10.5.0/3"; // Modifica per il tuo fuso orario
 const char* ssid = ""; //SSID
 const char* password = ""; //passwort
 const char* MQTT_BROKER = ""; //MQTT Server IP
@@ -277,45 +276,41 @@ void loop() {
     }
   }
 
+  // Lettura seriale RS485: eseguita ad ogni ciclo di loop per non perdere byte
+  while (Serial1.available()) {
+    char incomingByte = Serial1.read();
+    incomingData += incomingByte;
+    // Check if frame starts
+    if (!frameStarted && incomingData.endsWith("\x7E\x08")) {
+      WebSerial.println("Paket verpasst!");
+    }
+    if (!frameStarted && incomingData.endsWith("\x7E\x07")) {
+        // Start of a new frame detected
+        frameStarted = true;
+        incomingData = "\x7E\x07";  // Reset buffer to only contain start delimiter
+    }
+    // Check if frame ends
+    else if (frameStarted && incomingData.endsWith("\x7E\x08")) {
+        // End of frame detected
+        frameStarted = false; // Reset flag for the next frame
+        // Remove start (0x7E 0x07) and end (0x7E 0x08) sequences
+        String frame = incomingData.substring(2, incomingData.length() - 2);
+        incomingData = ""; // Clear buffer for next potential frame
+        // Process the frame
+        processFrame(frame);
+    }
+    // Reset if the buffer grows too large (safety mechanism)
+    if (incomingData.length() > 1024) {
+        incomingData = "";
+        frameStarted = false;
+        WebSerial.println("Buffer zu klein!");
+    }
+  }
+
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     WebsocketSend();
 
-
-while (Serial1.available()) {
-        char incomingByte = Serial1.read();
-        incomingData += incomingByte;
-        // Check if frame starts
-        if (!frameStarted && incomingData.endsWith("\x7E\x08")) {
-          WebSerial.println("Paket verpasst!");
-        }
-        if (!frameStarted && incomingData.endsWith("\x7E\x07")) {
-            // Start of a new frame detected
-            frameStarted = true;
-            incomingData = "\x7E\x07";  // Reset buffer to only contain start delimiter
-        }
-        // Check if frame ends
-        else if (frameStarted && incomingData.endsWith("\x7E\x08")) {
-            // End of frame detected
-            frameStarted = false; // Reset flag for the next frame
-            // Remove start (0x7E 0x07) and end (0x7E 0x08) sequences
-            String frame = incomingData.substring(2, incomingData.length() - 2);
-            incomingData = ""; // Clear buffer for next potential frame
-            // Check the length of the raw frame
-            //if (frame.length() < 6) { // Must have at least address (2), type (2), checksum (2)
-                //Serial.println("Frame too short!");
-                //continue; // Skip to the next iteration to avoid processing
-            //}
-            // Process the frame
-            processFrame(frame);
-        }
-        // Reset if the buffer grows too large (safety mechanism)
-        if (incomingData.length() > 1024) {
-            incomingData = "";
-            frameStarted = false;
-            WebSerial.println("Buffer zu klein!");
-        }
-    }
     // Auto-save NodeTable se modificata (debounce 30 secondi)
     static unsigned long lastAutoSave = 0;
     if (NodeTable_changed && (millis() - lastAutoSave > 30000)) {
@@ -771,7 +766,7 @@ String removeEscapeSequences(const String& frame) {
 
 // Inserire nel setup() dopo la connessione WiFi:
 void setupNTP() {
-  setenv("TZ", "CET-1CEST,M3.5.0/2,M10.5.0/3", 1);
+  setenv("TZ", TZ_STRING, 1);
   tzset();
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   struct tm timeinfo;
