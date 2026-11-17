@@ -40,9 +40,17 @@ Legge il bus RS-485 (protocollo TAP) e fornisce una dashboard web, WebSocket e p
     "vout":     34.40,
     "amp":      6.94,
     "temp":     34.4,
-    "rssi":     126
+    "rssi":     126,
+    "online":   true,
+    "age":      3,
+    "hwid":     45
   }
   ```
+  `watt` = `vin` × `amp` (potenza in ingresso all'ottimizzatore). `rssi` è il valore grezzo 0–255, non dBm.
+  `hwid` = ID hardware del modulo letto dalla risposta `Version` (es. `Mnode Version K8.0120 (2D)` → 0x2D), `-1` finché non visto.
+  La scala della corrente dipende da `hwid` come nel CCA: ≤ 0x23 → 0,0025 A; 0x24–0x5F → 0,005 A; > 0x5F → 0,025 A
+  (senza `hwid` si usa 0,005 A). `temp` si aggiorna solo quando il bit 0x20 della status word lo marca come temperatura.
+  Se un modulo non invia dati da 5 minuti: `online: false` e `watt`/`vin`/`vout`/`amp` a 0. `age` = secondi dall'ultimo dato (`-1` = mai ricevuto).
 - 💾 **NodeTable** — salvataggio automatico con debounce 30 s (`/nodetable.json`)
 - 🔖 **Panel Map** — associazione persistente longAddress → etichetta (`/panel_map.json`)
 - 🕒 **NTP sync** — orario preciso alla sincronizzazione
@@ -152,6 +160,7 @@ http://<IP_ESP32>
 ## 📎 Crediti
 
 - Reverse engineering protocollo: [willglynn/taptap](https://github.com/willglynn/taptap)
+- Correzioni al protocollo ricavate dal firmware CCA: [docs/PROTOCOL-NOTES.md](docs/PROTOCOL-NOTES.md)
 - Progetto originale: [tictactom/tigo_server](https://github.com/tictactom/tigo_server)
 - Questa fork aggiunge dashboard grafica, panel mapping, NodeTable persistente, pagine dark-theme.
 

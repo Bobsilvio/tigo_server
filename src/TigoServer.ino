@@ -38,6 +38,8 @@ void savePanelMap();
 void handleRoot();
 String generateFileListHTML();
 void handleFileUpload();
+int getHwId(const String& addr);
+float currentScaleFor(int hwId);
 
 File uploadFile;
 
@@ -53,6 +55,8 @@ struct DeviceData {
   int rssi;
   String barcode;
   bool changed = false;
+  bool online = false;          // true while power reports keep arriving
+  unsigned long last_seen = 0;  // millis() of the last power report
 };
 DeviceData devices[100]; // Array to store data for up to 100 devices
 int deviceCount = 0; // To keep track of how many devices are being tracked
@@ -61,6 +65,7 @@ struct NodeTableData {
   String longAddress;
   String addr;
   String checksum;
+  int hwId = -1;   // hardware ID from the module "Version" string, -1 = not seen yet
 };
 NodeTableData NodeTable[100];
 int NodeTable_count = 0;
@@ -90,6 +95,12 @@ PubSubClient MQTT_Client(espClient);
 unsigned long currentMillis = millis();
 unsigned long previousMillis = millis();
 unsigned long interval = 2000;
+
+// A panel with no power report for this long is reported as offline (values zeroed),
+// so consumers never keep integrating a frozen reading.
+const unsigned long DEVICE_STALE_MS = 5UL * 60UL * 1000UL;
+// Minimum delay between MQTT connection attempts.
+const unsigned long MQTT_RETRY_MS = 30000;
 
 const char crc_char_map[] = "GHJKLMNPRSTVWXYZ";
 const uint8_t crc_table[256] = {
@@ -197,12 +208,17 @@ void WebsocketSend(bool send_all = false) {
       obj["id"]       = label != "" ? label : (d.barcode != "" ? d.barcode : "mod#" + String(i + 1));
       obj["panel"]    = label;      // stringa vuota se non mappato
       obj["longaddr"] = longAddr;   // utile per la pagina /panels
-      obj["watt"] = round(d.voltage_out * d.current_in);
-      obj["vin"] = d.voltage_in;
-      obj["vout"] = d.voltage_out;
-      obj["amp"] = d.current_in;
+      // The reported current is the optimizer INPUT current, so power is Vin * Iin
+      // (Vout * Iin under-reports whenever the optimizer is bucking, e.g. shaded panels).
+      obj["watt"] = d.online ? round(d.voltage_in * d.current_in) : 0;
+      obj["vin"] = d.online ? d.voltage_in : 0;
+      obj["vout"] = d.online ? d.voltage_out : 0;
+      obj["amp"] = d.online ? d.current_in : 0;
       obj["temp"] = d.temperature;
       obj["rssi"] = d.rssi;
+      obj["hwid"] = getHwId(d.addr);
+      obj["online"] = d.online;
+      obj["age"] = d.last_seen ? (long)((millis() - d.last_seen) / 1000) : -1L; // seconds, -1 = never seen
       obj["barcode"] = d.barcode;
       obj["addr"] = d.addr;
       d.changed = false;
@@ -260,18 +276,22 @@ void setup() {
 void loop() {
   currentMillis = millis();
   ArduinoOTA.handle();
-  MQTT_Client.loop();
+  if (MQTT_BROKER[0] != '\0') MQTT_Client.loop();
   yield();
   delay(10);
 
   static String incomingData = "";
   static bool frameStarted = false;
 
-  if(WiFi.status() == WL_CONNECTED){
-    if(!MQTT_Client.connected()){
-      MQTT_Client.connect(hostname, mqtt_user, mqtt_pass);
+  // MQTT is optional: skip it entirely when no broker is configured, and never retry
+  // more often than MQTT_RETRY_MS (a blocking connect on every loop drops RS485 bytes).
+  static unsigned long lastMqttAttempt = 0;
+  if (MQTT_BROKER[0] != '\0' && WiFi.status() == WL_CONNECTED && !MQTT_Client.connected()
+      && (lastMqttAttempt == 0 || currentMillis - lastMqttAttempt >= MQTT_RETRY_MS)) {
+    lastMqttAttempt = currentMillis ? currentMillis : 1;
+    if (MQTT_Client.connect(hostname, mqtt_user, mqtt_pass)) {
       WebSerial.println(WiFi.localIP());
-      sprintf(address_complete, "%s%s%s", "TIGO/server/", WiFi.localIP().toString().c_str(),"/startup");
+      snprintf(address_complete, sizeof(address_complete), "%s%s%s", "TIGO/server/", WiFi.localIP().toString().c_str(), "/startup");
       MQTT_Client.publish(address_complete, "Hello");
     }
   }
@@ -309,6 +329,15 @@ void loop() {
 
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
+
+    // Flag panels that stopped reporting so the change is pushed once to clients
+    for (int i = 0; i < deviceCount; i++) {
+      // millis() (not currentMillis): last_seen may be newer than the loop's snapshot
+      if (devices[i].online && (millis() - devices[i].last_seen > DEVICE_STALE_MS)) {
+        devices[i].online = false;
+        devices[i].changed = true;
+      }
+    }
     WebsocketSend();
 
     // Auto-save NodeTable se modificata (debounce 30 secondi)
@@ -378,6 +407,7 @@ void loadNodeTable() {
       NodeTable[NodeTable_count].addr = obj["addr"].as<String>();
       // CRC4 is computed over the full 64-bit long address, not the short addr
       NodeTable[NodeTable_count].checksum = computeTigoCRC4(obj["longAddress"].as<String>().c_str());
+      NodeTable[NodeTable_count].hwId = obj["hwid"] | -1;
       NodeTable_count++;
       bool found = false;
       for (int i = 0; i < deviceCount; i++) {
@@ -433,6 +463,7 @@ void saveNodeTable() {
     obj["addr"] = NodeTable[i].addr;
     obj["longAddress"] = NodeTable[i].longAddress;
     obj["checksum"] = NodeTable[i].checksum;
+    if (NodeTable[i].hwId >= 0) obj["hwid"] = NodeTable[i].hwId;
   }
 
   size_t written = serializeJson(doc, file); // meno overhead rispetto a pretty
@@ -521,6 +552,54 @@ void process27frame(String frame){
 
 }
 
+int getHwId(const String& addr) {
+  for (int i = 0; i < NodeTable_count; i++) {
+    if (NodeTable[i].addr == addr) return NodeTable[i].hwId;
+  }
+  return -1;
+}
+
+// Input-current scale per hardware family, as done by the CCA (meshdcd 4.0.8:
+// CNodeVersion::DetermineHwScaling + TS4Utils::IsUnitHigherRated):
+//   HwId <= 0x23        -> 0.0025 A/unit
+//   0x23 < HwId <= 0x5F -> 0.005  A/unit
+//   HwId > 0x5F         -> raw * 5 * 0.005 = 0.025 A/unit ("higher rated" units)
+// Until the module's Version string has been seen we assume 0.005 (most common TS4).
+float currentScaleFor(int hwId) {
+  if (hwId < 0) return 0.005;
+  if (hwId > 0x5F) return 0.025;
+  if (hwId > 0x23) return 0.005;
+  return 0.0025;
+}
+
+// String response (PV packet type 0x07). The answer to "^00Version" looks like
+// "Mnode Version K8.0120 (2D)": the hex number in parentheses is the hardware ID.
+void process07frame(const String& packet) {
+  String addr = packet.substring(2, 6);
+  String text;
+  for (unsigned int i = 14; i + 1 < packet.length(); i += 2) {
+    char c = (char) strtol(packet.substring(i, i + 2).c_str(), nullptr, 16);
+    if (c >= 0x20 && c < 0x7F) text += c;
+  }
+  int v = text.indexOf("Version");
+  if (v < 0) return;
+  int open = text.indexOf('(', v);
+  int close = open >= 0 ? text.indexOf(')', open) : -1;
+  if (open < 0 || close <= open + 1) return;
+  int hwId = (int) strtol(text.substring(open + 1, close).c_str(), nullptr, 16);
+  if (hwId <= 0) return;
+  for (int i = 0; i < NodeTable_count; i++) {
+    if (NodeTable[i].addr == addr) {
+      if (NodeTable[i].hwId != hwId) {
+        NodeTable[i].hwId = hwId;
+        NodeTable_changed = true;
+        WebSerial.println("HwId " + addr + " = " + String(hwId, HEX) + " (" + text + ")");
+      }
+      return;
+    }
+  }
+}
+
 void processPowerFrame(String frame) {
   // pv_node_id (2 bytes)
   String addr = frame.substring(2, 6);   // Example: "001A"
@@ -539,12 +618,16 @@ void processPowerFrame(String frame) {
   // Duty Cycle (1 byte): Convert from hex to integer
   byte duty_cycle = strtol(frame.substring(20, 22).c_str(), nullptr, 16);
 
-  // Current In (2 bytes + 1 nibble): Convert from hex to integer, then scale by 0.005
-  int current_in_raw = strtol(frame.substring(22, 25).c_str(), nullptr, 16);  // 2.5 bytes (5 nibbles)
-  float current_in = current_in_raw * 0.005;  // Scale factor is 0.005
+  // Current In (12 bit): scale depends on the module hardware ID (see currentScaleFor)
+  int current_in_raw = strtol(frame.substring(22, 25).c_str(), nullptr, 16);
+  float current_in = current_in_raw * currentScaleFor(getHwId(addr));
+
+  // Status word (payload bytes 8-9, big endian). Bit 0x20 tells what the next 12-bit
+  // field holds: set = temperature, clear = a "Details" value (not a temperature).
+  int status = strtol(frame.substring(30, 34).c_str(), nullptr, 16);
+  bool temperature_valid = (status & 0x20) != 0;
 
   // Temperature (12 bit, two's complement): scale by 0.1°C/unit
-  // Sign-extend 12-bit value: if bit 11 is set, temperature is negative
   int temperature_raw = strtol(frame.substring(25, 28).c_str(), nullptr, 16);
   if (temperature_raw & 0x800) temperature_raw |= 0xFFFFF000; // sign extend to 32-bit
   float temperature = temperature_raw * 0.1;
@@ -554,7 +637,8 @@ void processPowerFrame(String frame) {
 
   // RSSI (1 byte): Convert from hex to integer
 
-  int rssi = strtol(frame.substring(38, 40).c_str(), nullptr, 16);
+  // 0 means "no usable RSSI" (the CCA discards it); absent in 12-byte reports
+  int rssi = frame.length() >= 40 ? strtol(frame.substring(38, 40).c_str(), nullptr, 16) : 0;
 
   // Find the device in the list or add a new one if not found
   bool found = false;
@@ -577,10 +661,12 @@ void processPowerFrame(String frame) {
       devices[i].voltage_out = voltage_out;
       devices[i].duty_cycle = duty_cycle;
       devices[i].current_in = current_in;
-      devices[i].temperature = temperature;
+      if (temperature_valid) devices[i].temperature = temperature;  // else keep last valid one
       devices[i].slot_counter = slot_counter_value;
-      devices[i].rssi = rssi;
+      if (rssi != 0) devices[i].rssi = rssi;
       devices[i].changed = true;
+      devices[i].online = true;
+      devices[i].last_seen = millis();
       found = true;
       break;
     }
@@ -593,7 +679,7 @@ void processPowerFrame(String frame) {
         break;
       }
     }
-    devices[deviceCount] = {pv_node_id, addr, voltage_in, voltage_out, duty_cycle, current_in, temperature, slot_counter_value, rssi, barcode, true};
+    devices[deviceCount] = {pv_node_id, addr, voltage_in, voltage_out, duty_cycle, current_in, temperature_valid ? temperature : 0, slot_counter_value, rssi, barcode, true, true, millis()};
     deviceCount++;
   }
 }
@@ -687,7 +773,7 @@ void processFrame(String frame) {
               process09frame(packet);
               //WebSerial.println("09er: " + packet);
             }else if(type == "07"){
-              //do nothing
+              process07frame(packet);
             }else if(type == "18"){
               //do nothing
             }else{

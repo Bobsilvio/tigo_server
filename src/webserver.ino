@@ -469,7 +469,7 @@ void handleDebugPage() {
 
     for (int ii = 0; ii < deviceCount; ii++) {
       int i = order[ii];
-      int watt = round(devices[i].voltage_out * devices[i].current_in);
+      int watt = devices[i].online ? round(devices[i].voltage_in * devices[i].current_in) : 0; // Vin * Iin
       String label = getPanelLabel(devices[i].addr);
       h += "<tr>";
       h += "<td class='hl-muted'>" + String(ii+1) + "</td>";
