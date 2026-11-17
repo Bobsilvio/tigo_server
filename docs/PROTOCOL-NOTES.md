@@ -69,9 +69,19 @@ From the CCA's own name table. "taptap" is taptap's name where it differs or is 
 | `E1` / `E2` | SetKnownNetworks Req / Resp | — |
 | `E3`–`E6` | Get / Erase StackTrace Req / Resp | — |
 
-`SetPgw` most likely means "set preferred gateway": the CCA has a `CPgwHeuristic` class.
-That fits taptap's observation that `41` is sent when modules come online at sunrise and go
-offline at sunset. The payload of `41` is not decoded yet.
+Notes on some of these types:
+
+- **`40`–`47` StarDisc** belong to "star discovery" (`cstardiscovery.cpp`). A TS4 can run in
+  legacy *star* mode or in *mesh* mode; a mesh node can act as **PGW** for nearby star
+  nodes. The CCA picks the next message per node: `41` SetPgw (two variants, with a flag
+  0 or 1), `42` Own, `43` Ignore, `44` Kick a star from a PGW. That fits taptap's observation
+  that `41` appears when modules come online at sunrise and go offline at sunset. What
+  "PGW" stands for is not spelled out in the binary, and the `41` payload is not decoded yet.
+- **`14` Report Combined** has a name but no parser in `meshdcd` 4.0.8: the CCA does not use it.
+  The periodic reports it processes are `09`, `30` and `31` only.
+- **`30` Report NetDebug** is a radio debug report (FrameCt, JoinReq/JoinRsp, SyncLoss,
+  LowPower, RapidShut, reselection and TX counters…). Its field layout is not fixed: the CCA
+  reads it from `/mnt/ffs/mgmtu/conf/netdebug.ini` and falls back to a built-in map.
 
 ## Power report (`31`)
 
@@ -247,4 +257,5 @@ and RSSI positions. The escaping scheme and frame CRC were checked on the captur
 - Payload of `41` StarDisc SetPgw.
 - Internal structure of the gateway config "Map" field and of the Optimization bits.
 - The global flag that enables the 18-bit slot counter.
-- Payloads of the packet types taptap never saw (`14`, `30`, `1D`/`1E`, firmware delivery…).
+- The built-in field map of `30` Report NetDebug.
+- Payloads of the other packet types taptap never saw (`1D`/`1E`, firmware delivery…).

@@ -8,6 +8,7 @@
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include <freertos/semphr.h>
 
 const char* hostname = "TigoServer";
 const char* TZ_STRING = "CET-1CEST,M3.5.0/2,M10.5.0/3"; // Modifica per il tuo fuso orario
@@ -196,7 +197,35 @@ String getPanelLabel(const String& longAddress) {
   return "";
 }
 
+// devices[], NodeTable[] and panelMap[] are written by loop() (RS485 decoding) and read
+// by the async web server task (/debug, /panels, /panel_set...). Arduino String is not
+// thread safe, so every access goes through this recursive mutex.
+SemaphoreHandle_t dataMutex = nullptr;
+struct DataLock {
+  DataLock()  { if (dataMutex) xSemaphoreTakeRecursive(dataMutex, portMAX_DELAY); }
+  ~DataLock() { if (dataMutex) xSemaphoreGiveRecursive(dataMutex); }
+};
+// Set by the WebSocket connect event (async task); loop() sends the full snapshot.
+volatile bool wsSendAllPending = false;
+
+// PV packet types known from the CCA firmware name table (see docs/PROTOCOL-NOTES.md).
+// Only types outside this list are logged, to keep WebSerial quiet.
+bool isKnownPvType(int t) {
+  switch (t) {
+    case 0x06: case 0x07: case 0x09: case 0x0D: case 0x0E: case 0x0F: case 0x10: case 0x11:
+    case 0x13: case 0x14: case 0x15: case 0x17: case 0x18: case 0x1D: case 0x1E: case 0x22:
+    case 0x23: case 0x24: case 0x26: case 0x27: case 0x29: case 0x2B: case 0x2C: case 0x2D:
+    case 0x2E: case 0x2F: case 0x30: case 0x31: case 0x40: case 0x41: case 0x42: case 0x43:
+    case 0x44: case 0x45: case 0x46: case 0x47: case 0x50: case 0xE1: case 0xE2: case 0xE3:
+    case 0xE4: case 0xE5: case 0xE6:
+      return true;
+    default:
+      return false;
+  }
+}
+
 void WebsocketSend(bool send_all = false) {
+  DataLock lock;
   StaticJsonDocument<8192> doc; 
   JsonArray array = doc.to<JsonArray>();
   for (int i = 0; i < deviceCount; i++) {
@@ -234,7 +263,7 @@ void WebsocketSend(bool send_all = false) {
 void onWebSocketEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
   if (type == WS_EVT_CONNECT) {
     WebSerial.printf("WebSocket client connected: %u\n", client->id());
-    WebsocketSend(true);
+    wsSendAllPending = true;  // sent from loop(), never from the async task
   } else if (type == WS_EVT_DISCONNECT) {
     WebSerial.printf("WebSocket client disconnected: %u\n", client->id());
   }
@@ -258,6 +287,10 @@ void initWiFi() {
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
+  dataMutex = xSemaphoreCreateRecursiveMutex();
+  // Bigger RX buffer: web requests and SPIFFS writes can stall loop() for tens of ms,
+  // and the default 256 bytes fill in ~70 ms at 38400 baud.
+  Serial1.setRxBufferSize(4096);
   Serial1.begin(38400, SERIAL_8N1, RX_PIN, TX_PIN);
   generateCRCTable();  // Generate the CRC lookup table
   initWiFi();
@@ -269,8 +302,11 @@ void setup() {
   ArduinoOTA.setHostname(hostname);
   ArduinoOTA.begin();
   SPIFFS.begin(true);
-  loadNodeTable();
-  loadPanelMap();
+  {
+    DataLock lock;  // the web server is already running at this point
+    loadNodeTable();
+    loadPanelMap();
+  }
 }
 
 void loop() {
@@ -317,7 +353,10 @@ void loop() {
         String frame = incomingData.substring(2, incomingData.length() - 2);
         incomingData = ""; // Clear buffer for next potential frame
         // Process the frame
-        processFrame(frame);
+        {
+          DataLock lock;
+          processFrame(frame);
+        }
     }
     // Reset if the buffer grows too large (safety mechanism)
     if (incomingData.length() > 1024) {
@@ -329,6 +368,12 @@ void loop() {
 
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
+    DataLock lock;
+
+    if (wsSendAllPending) {
+      wsSendAllPending = false;
+      WebsocketSend(true);
+    }
 
     // Flag panels that stopped reporting so the change is pushed once to clients
     for (int i = 0; i < deviceCount; i++) {
@@ -776,7 +821,7 @@ void processFrame(String frame) {
               process07frame(packet);
             }else if(type == "18"){
               //do nothing
-            }else{
+            }else if(!isKnownPvType(strtol(type.c_str(), nullptr, 16))){
               WebSerial.println("Unbekannt: " + packet);
             }
             // Weiter zum nächsten Paket
@@ -804,7 +849,7 @@ void processFrame(String frame) {
             //unknown
           }else if(type == "2E"){
             //unknown
-          }else{
+          }else if(!isKnownPvType(strtol(type.c_str(), nullptr, 16))){
             WebSerial.println("Unknown Type: " + type);
             WebSerial.println(hexFrame);
           }
@@ -855,10 +900,11 @@ void setupNTP() {
   setenv("TZ", TZ_STRING, 1);
   tzset();
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  // Wait at most 10 s: without internet the device must still boot and decode RS485.
+  // SNTP keeps retrying in the background, so the clock is set as soon as it can be.
   struct tm timeinfo;
-  while (!getLocalTime(&timeinfo)) {
-    Serial.println("Sync NTP...");
-    delay(1000);
+  if (!getLocalTime(&timeinfo, 10000)) {
+    Serial.println("NTP not reachable, continuing without time sync");
   }
 }
 

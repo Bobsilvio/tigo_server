@@ -49,6 +49,7 @@ void setupWebserver() {
 
   // Gestione pannelli
   server.on("/panel_set", HTTP_POST, [](AsyncWebServerRequest *request) {
+    DataLock lock;
     if (request->hasParam("longAddress", true) && request->hasParam("label", true)) {
       String la  = request->getParam("longAddress", true)->value();
       String lbl = request->getParam("label", true)->value();
@@ -77,6 +78,7 @@ void setupWebserver() {
   });
 
   server.on("/panel_delete", HTTP_GET, [](AsyncWebServerRequest *request) {
+    DataLock lock;
     if (request->hasParam("longAddress")) {
       String la = request->getParam("longAddress")->value();
       for (int i = 0; i < panelMap_count; i++) {
@@ -137,6 +139,7 @@ void setupWebserver() {
 
   // Salva NodeTable
   server.on("/save", HTTP_GET, [](AsyncWebServerRequest *request) {
+    DataLock lock;
     request->send(200, "text/plain", "Saving NodeTable...");
     delay(100);
     saveNodeTable();
@@ -280,6 +283,7 @@ String generateFileListHTML() {
 
 void handlePanelsPage() {
   server.on("/panels", HTTP_GET, [](AsyncWebServerRequest *request) {
+    DataLock lock;
 
     String h = "<!DOCTYPE html><html lang='en'><head>"
       "<meta charset='UTF-8'>"
@@ -391,6 +395,7 @@ void handlePanelsPage() {
 
 void handleDebugPage() {
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
+    DataLock lock;
 
     String h = "<!DOCTYPE html><html lang='en'><head>"
       "<meta charset='UTF-8'>"
