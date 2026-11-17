@@ -1,13 +1,15 @@
 # Tigo RS485 Monitor
 
-Monitor locale per ottimizzatori solari **Tigo TS4**: un ESP32 ascolta il bus RS-485 tra i TAP e il CCA e legge,
-per ogni pannello, potenza, tensioni, corrente e temperatura. Nessun cloud, nessuna modifica al CCA: l'ESP32 è in
-sola ricezione e il CCA continua a funzionare come prima.
+**English** · [Italiano](README.it.md)
 
-Esistono due varianti dello stesso progetto. Leggono il bus nello stesso modo, con la stessa decodifica verificata sul
-firmware del CCA; cambia **dove vedi i dati**.
+Local monitor for **Tigo TS4** solar optimizers: an ESP32 listens to the RS-485 bus between the TAPs and the CCA and
+reads, for each panel, power, voltages, current and temperature. No cloud, no changes to the CCA: the ESP32 only
+receives, and the CCA keeps working as before.
 
-## Scegli la variante
+The project comes in two variants. Both read the bus the same way, with the same decoding verified against the CCA
+firmware; what changes is **where you see the data**.
+
+## Choose your variant
 
 <table>
 <tr>
@@ -15,89 +17,89 @@ firmware del CCA; cambia **dove vedi i dati**.
 <th width="50%"><a href="esphome/README.md">ESPHome · Home Assistant</a></th>
 </tr>
 <tr>
-<td><img src="images/example-arduino.png" alt="Dashboard della variante Arduino"/></td>
-<td><img src="images/example-esphome.png" alt="Entità della variante ESPHome in Home Assistant"/></td>
+<td><img src="images/example-arduino.png" alt="Dashboard of the Arduino variant"/></td>
+<td><img src="images/example-esphome.png" alt="Entities of the ESPHome variant in Home Assistant"/></td>
 </tr>
 <tr>
-<td>La dashboard web dell'ESP32: una scheda per pannello, potenza totale nel tempo e confronto tra pannelli.</td>
-<td>Le entità native in Home Assistant, usate in una dashboard: potenza, energia, temperature e storico.</td>
+<td>The ESP32's own web dashboard: one card per panel, total power over time and a panel comparison.</td>
+<td>Native Home Assistant entities, used in a dashboard: power, energy, temperatures and history.</td>
 </tr>
 </table>
 
-<sub>Esempi con dati inventati: 12 pannelli, B4 in ombra. A sinistra la vera dashboard del firmware, a destra un
-mockup di una dashboard Home Assistant costruita con le entità della variante ESPHome.</sub>
+<sub>Examples with invented data: 12 panels, B4 shaded. Left: the real firmware dashboard (its interface is in
+Italian). Right: a mockup of a Home Assistant dashboard built from the ESPHome variant's entities.</sub>
 
-### Arduino: un dispositivo autonomo
+### Arduino: a standalone device
 
-L'ESP32 è un piccolo server: apri il suo indirizzo nel browser e hai subito la dashboard, senza installare nient'altro.
+The ESP32 is a small server: open its address in a browser and the dashboard is there, nothing else to install.
 
-- **Ideale se** non usi Home Assistant, vuoi guardare l'impianto da un browser, o vuoi uno strumento di diagnosi da
-  portare sul campo.
-- **Cosa offre**: dashboard live, pagina di debug con i valori grezzi, pagina per dare un nome ai pannelli,
-  file manager, WebSocket per altri programmi.
-- **Con Home Assistant**: possibile, tramite l'integrazione [tigosolar-local](https://github.com/Bobsilvio/tigosolar-local)
-  (sorgente `ESP32_WS`), che legge il WebSocket.
-- **Limiti**: lo storico della dashboard dura finché la pagina è aperta (60 campioni in memoria); Wi-Fi e pin si
-  impostano nel codice e si compila con l'Arduino IDE.
+- **Best if** you don't use Home Assistant, you want to watch the system from a browser, or you want a diagnostic
+  tool to take on site.
+- **What you get**: live dashboard, debug page with raw values, a page to name the panels, file manager, and a
+  WebSocket for other programs.
+- **With Home Assistant**: possible, through the [tigosolar-local](https://github.com/Bobsilvio/tigosolar-local)
+  integration (`ESP32_WS` source), which reads the WebSocket.
+- **Limits**: the dashboard history lasts only while the page is open (60 samples in memory); Wi-Fi and pins are
+  set in the code, built with the Arduino IDE.
 
-### ESPHome: dentro Home Assistant
+### ESPHome: inside Home Assistant
 
-L'ESP32 diventa un dispositivo ESPHome: Home Assistant lo trova da solo e ogni pannello ha le sue entità.
+The ESP32 becomes an ESPHome device: Home Assistant discovers it and every panel gets its own entities.
 
-- **Ideale se** usi già Home Assistant e vuoi i dati dei pannelli accanto al resto della casa.
-- **Cosa offre**: entità native per potenza, tensioni, corrente, temperatura, RSSI e duty cycle di ogni pannello;
-  storico, statistiche a lungo termine, dashboard Energia, automazioni e notifiche (per esempio "B4 produce poco").
-- **Configurazione**: un file YAML; aggiornamenti OTA e log da ESPHome. Il componente si scarica da questo repository.
-- **Limiti**: nessuna pagina web propria; i pannelli vanno elencati nel YAML (un sensore diagnostico mostra quelli
-  non ancora configurati, con l'indirizzo pronto da copiare).
+- **Best if** you already use Home Assistant and want the panel data next to the rest of your home.
+- **What you get**: native entities for each panel's power, voltages, current, temperature, RSSI and duty cycle;
+  history, long-term statistics, the Energy dashboard, automations and notifications (e.g. "B4 is producing little").
+- **Setup**: one YAML file; OTA updates and logs from ESPHome. The component is downloaded from this repository.
+- **Limits**: no web page of its own; panels must be listed in the YAML (a diagnostic sensor shows the ones not
+  configured yet, with the address ready to copy).
 
-### Le differenze in breve
+### Differences at a glance
 
 | | Arduino | ESPHome |
 |---|---|---|
-| Dove vedi i dati | dashboard web dell'ESP32 | Home Assistant |
-| Serve Home Assistant | no | sì |
-| Storico | solo a pagina aperta | completo, in Home Assistant |
-| Configurazione | Arduino IDE, Wi-Fi e pin nel codice | YAML ESPHome |
-| Nomi dei pannelli | pagina `/panels` | nel YAML |
-| Pannello che smette di trasmettere | dopo 5 minuti `online: false` e valori a 0 | dopo 5 minuti "non disponibile" |
-| Aggiornamenti | OTA Arduino | OTA ESPHome |
-| Integrazione custom in HA | sì (tigosolar-local) | no, nativo |
+| Where you see the data | the ESP32's web dashboard | Home Assistant |
+| Needs Home Assistant | no | yes |
+| History | only while the page is open | full, in Home Assistant |
+| Setup | Arduino IDE, Wi-Fi and pins in the code | ESPHome YAML |
+| Panel names | `/panels` page | in the YAML |
+| Panel that stops reporting | after 5 minutes `online: false` and values at 0 | after 5 minutes "unavailable" |
+| Updates | Arduino OTA | ESPHome OTA |
+| Custom integration in HA | yes (tigosolar-local) | no, native |
 
-Entrambe identificano i pannelli col long address dell'ottimizzatore, salvano in memoria l'abbinamento con l'ID corto
-e il modello hardware, e calcolano potenza e corrente come il CCA.
+Both identify panels by the optimizer's long address, keep its mapping to the short node ID and the hardware model
+in memory, and compute power and current the way the CCA does.
 
-## Hardware comune
+## Common hardware
 
 - ESP32
-- modulo TTL↔RS485 (MAX485 o ad auto-direzione) in **sola ricezione**: l'uscita dati del modulo va al pin RX
-  dell'ESP32, l'ingresso dati del modulo resta scollegato
-- collegamento A/B in parallelo al bus TAP ↔ CCA, 38400 baud 8N1
-- convertitore DC-DC 12/24 V → 5 V (USB-C) per alimentare l'ESP32 dal bus
+- TTL↔RS485 module (MAX485 or auto-direction) in **receive-only** mode: the module's data output goes to the
+  ESP32 RX pin, the module's data input stays disconnected
+- A/B wired in parallel to the TAP ↔ CCA bus, 38400 baud 8N1
+- 12/24 V → 5 V DC-DC converter (USB-C) to power the ESP32 from the bus
 
-<img src="images/wiring.svg" alt="Schema di collegamento" width="900"/>
+<img src="images/wiring.svg" alt="Wiring diagram" width="900"/>
 
-## Protocollo
+## Protocol
 
-[docs/PROTOCOL-NOTES.md](docs/PROTOCOL-NOTES.md) descrive il protocollo del bus come lo decodifica il firmware del
-CCA (4.0.8): layout del power report, scala della corrente per ID hardware, nomi ufficiali dei pacchetti e i punti
-in cui [taptap](https://github.com/willglynn/taptap) è sbagliato o incompleto.
+[docs/PROTOCOL-NOTES.md](docs/PROTOCOL-NOTES.md) describes the bus protocol as the CCA firmware (4.0.8) decodes it:
+power report layout, current scale by hardware ID, official packet names, and where
+[taptap](https://github.com/willglynn/taptap) is wrong or incomplete.
 
-## Struttura del repository
+## Repository layout
 
 ```
-arduino/    variante Arduino: sketch TigoServer/ e README
-esphome/    variante ESPHome: componente tigo_rs485, example.yaml, test, README
-docs/       note sul protocollo
-images/     immagini
+arduino/    Arduino variant: TigoServer/ sketch and README
+esphome/    ESPHome variant: tigo_rs485 component, example.yaml, tests, README
+docs/       protocol notes
+images/     images
 ```
 
-## Crediti
+## Credits
 
-- Reverse engineering del protocollo: [willglynn/taptap](https://github.com/willglynn/taptap)
-- Progetto originale: [tictactom/tigo_server](https://github.com/tictactom/tigo_server)
-- Correzioni al protocollo ricavate dal firmware del CCA: [docs/PROTOCOL-NOTES.md](docs/PROTOCOL-NOTES.md)
+- Protocol reverse engineering: [willglynn/taptap](https://github.com/willglynn/taptap)
+- Original project: [tictactom/tigo_server](https://github.com/tictactom/tigo_server)
+- Protocol corrections from the CCA firmware: [docs/PROTOCOL-NOTES.md](docs/PROTOCOL-NOTES.md)
 
-## Licenza
+## License
 
-MIT — libero adattamento per il proprio impianto.
+MIT — free to adapt for your own system.

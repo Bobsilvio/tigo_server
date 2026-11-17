@@ -1,68 +1,70 @@
 # Tigo RS485 Monitor – ESPHome (Home Assistant)
 
-Variante **ESPHome** di [Tigo RS485 Monitor](../README.md): un componente esterno ESPHome (`tigo_rs485`) che ascolta
-il bus RS-485 tra TAP e CCA e pubblica in Home Assistant, in modo nativo, un set di sensori per ogni ottimizzatore.
-Niente integrazione custom, niente WebSocket: Wi-Fi, OTA e log sono quelli standard di ESPHome.
+**English** · [Italiano](README.it.md)
 
-Per una dashboard web autonoma senza Home Assistant usa la variante [Arduino](../arduino/README.md).
+**ESPHome** variant of [Tigo RS485 Monitor](../README.md): an ESPHome external component (`tigo_rs485`) that listens to
+the RS-485 bus between the TAPs and the CCA and publishes a set of sensors for each optimizer natively in Home
+Assistant. No custom integration, no WebSocket: Wi-Fi, OTA and logs are ESPHome's standard ones.
+
+For a standalone web dashboard without Home Assistant, use the [Arduino](../arduino/README.md) variant.
 
 ---
 
-## Cosa fa
+## What it does
 
-- Ascolta il bus in **sola ricezione** (38400 baud 8N1): non trasmette mai, il CCA continua a funzionare come prima.
-- Per ogni pannello configurato pubblica: **potenza**, tensione d'ingresso e d'uscita, **corrente**, **temperatura**,
-  RSSI e duty cycle.
-- Decodifica allineata al firmware del CCA (4.0.8), più accurata di taptap:
-  - potenza = Vin × Iin, come la calcola il CCA;
-  - scala della corrente secondo l'ID hardware del modulo (letto dalle risposte `Version`):
-    ≤ 0x23 → 0,0025 A, 0x24–0x5F → 0,005 A, > 0x5F → 0,025 A; 0,005 A finché non è noto;
-  - temperatura pubblicata solo quando il bit 0x20 della status word la marca come tale;
-  - RSSI 0 ("valore non valido") scartato.
+- Listens to the bus **receive-only** (38400 baud 8N1): it never transmits, and the CCA keeps working as before.
+- For each configured panel it publishes: **power**, input and output voltage, **current**, **temperature**,
+  RSSI and duty cycle.
+- Decoding matches the CCA firmware (4.0.8), more accurate than taptap:
+  - power = Vin × Iin, as the CCA computes it;
+  - current scale by the module hardware ID (read from the `Version` answers):
+    ≤ 0x23 → 0.0025 A, 0x24–0x5F → 0.005 A, > 0x5F → 0.025 A; 0.005 A until known;
+  - temperature published only when bit 0x20 of the status word marks it as such;
+  - RSSI 0 ("no usable value") discarded.
 
-  Dettagli: [docs/PROTOCOL-NOTES.md](../docs/PROTOCOL-NOTES.md).
-- Identifica i pannelli per **long address** (64 bit, fisso nell'hardware), non per l'ID corto che il CCA può
-  riassegnare. L'abbinamento ID corto → long address e l'ID hardware arrivano sul bus di rado: vengono salvati in
-  flash e sopravvivono ai riavvii.
-- Un pannello che non trasmette per `offline_timeout` (predefinito 5 minuti) diventa "non disponibile" in Home Assistant.
-- Un sensore di testo diagnostico elenca i pannelli che trasmettono ma non sono ancora configurati, con il loro long
-  address pronto da copiare.
+  Details: [docs/PROTOCOL-NOTES.md](../docs/PROTOCOL-NOTES.md).
+- Identifies panels by their **long address** (64 bits, fixed in hardware), not by the short ID the CCA can
+  reassign. The short ID → long address mapping and the hardware ID show up on the bus rarely: they are saved to
+  flash and survive reboots.
+- A panel that stops reporting for `offline_timeout` (5 minutes by default) becomes "unavailable" in Home Assistant.
+- A diagnostic text sensor lists the panels that report but are not configured yet, with their long address ready
+  to copy.
 
 ---
 
 ## Hardware
 
-<img src="../images/wiring.svg" alt="Schema di collegamento" width="900"/>
+<img src="../images/wiring.svg" alt="Wiring diagram" width="900"/>
 
-| Componente | Note |
+| Component | Notes |
 |---|---|
-| **ESP32** | qualsiasi modulo supportato da ESPHome |
-| **Convertitore TTL→RS485** | MAX485 o simile, in sola ricezione |
-| **Regolatore 5 V** | se alimentato dal bus |
+| **ESP32** | any module supported by ESPHome |
+| **TTL→RS485 converter** | MAX485 or similar, receive-only |
+| **5 V regulator** | when powered from the bus |
 
-| Modulo RS-485 | ESP32 / bus | Note |
+| RS-485 module | ESP32 / bus | Notes |
 |---|---|---|
 | VCC | 3V3 | |
 | GND | GND | |
-| TXD (o RO) | `rx_pin` (es. GPIO 16) | dati dal bus verso l'ESP32 |
-| RXD (o DI) | non collegato | l'ESP32 non trasmette |
-| RE/DE (se presenti) | GND | sola ricezione; i moduli ad auto-direzione non li hanno |
-| A (D+) / B (D−) | A / B del bus TAP ↔ CCA | in parallelo |
+| TXD (or RO) | `rx_pin` (e.g. GPIO 16) | data from the bus to the ESP32 |
+| RXD (or DI) | not connected | the ESP32 never transmits |
+| RE/DE (if present) | GND | receive-only; auto-direction modules don't have them |
+| A (D+) / B (D−) | A / B of the TAP ↔ CCA bus | in parallel |
 
-Evita i pin della seriale USB (GPIO 1/3 su ESP32): il logger di ESPHome li usa.
+Avoid the USB serial pins (GPIO 1/3 on the ESP32): the ESPHome logger uses them.
 
 ---
 
-## Installazione
+## Installation
 
-1. Copia [`example.yaml`](example.yaml) nella tua configurazione ESPHome e imposta Wi-Fi e `rx_pin`.
-2. Il componente si scarica da GitHub:
+1. Copy [`example.yaml`](example.yaml) into your ESPHome configuration and set Wi-Fi and `rx_pin`.
+2. The component is downloaded from GitHub:
    ```yaml
    external_components:
      - source: github://Bobsilvio/tigo_server@main
        components: [tigo_rs485]
    ```
-3. Configura UART e componente:
+3. Configure the UART and the component:
    ```yaml
    uart:
      id: tigo_bus
@@ -72,17 +74,17 @@ Evita i pin della seriale USB (GPIO 1/3 su ESP32): il logger di ESPHome li usa.
 
    tigo_rs485:
      uart_id: tigo_bus
-     offline_timeout: 5min   # opzionale
+     offline_timeout: 5min   # optional
    ```
-4. Flasha una prima volta con solo il sensore dei pannelli non configurati:
+4. Flash once with only the unconfigured panels sensor:
    ```yaml
    text_sensor:
      - platform: tigo_rs485
        unconfigured_panels:
          name: Unconfigured panels
    ```
-   Appena il sole è alto i long address compaiono lì e nei log (`Unconfigured panel reporting: 04C05B4000B1A688`).
-5. Aggiungi un blocco per ogni pannello:
+   Once the sun is up, the long addresses appear there and in the logs (`Unconfigured panel reporting: 04C05B4000B1A688`).
+5. Add one block per panel:
    ```yaml
    sensor:
      - platform: tigo_rs485
@@ -102,13 +104,13 @@ Evita i pin della seriale USB (GPIO 1/3 su ESP32): il logger di ESPHome li usa.
        duty_cycle:
          name: A1 Duty Cycle
    ```
-   Tutti i sensori sono opzionali.
+   All sensors are optional.
 
-### Long address non ancora noto
+### Long address not known yet
 
-Il long address di un modulo si impara quando il CCA rilegge la tabella dei nodi, cosa che succede di rado (di
-solito alla discovery). Finché non è noto il pannello compare come `node 001A` tra quelli non configurati; puoi
-usarlo temporaneamente con l'ID corto, sapendo che il CCA può riassegnarlo:
+A module's long address is learned when the CCA reads the node table again, which happens rarely (usually at
+discovery). Until then the panel shows up as `node 001A` among the unconfigured ones; you can use it temporarily by
+its short ID, knowing that the CCA may reassign it:
 
 ```yaml
   - platform: tigo_rs485
@@ -117,33 +119,33 @@ usarlo temporaneamente con l'ID corto, sapendo che il CCA può riassegnarlo:
       name: A3 Power
 ```
 
-### Energia
+### Energy
 
-L'energia si ottiene integrando la potenza sul dispositivo con la piattaforma standard `integration`
-(vedi `example.yaml`), utilizzabile nella dashboard Energia di Home Assistant.
+Energy is obtained by integrating power on the device with the standard `integration` platform
+(see `example.yaml`), usable in the Home Assistant Energy dashboard.
 
 ---
 
-## Riferimento configurazione
+## Configuration reference
 
 **`tigo_rs485`**
 
-| Opzione | Predefinito | Descrizione |
+| Option | Default | Description |
 |---|---|---|
-| `uart_id` | — | UART collegato al bus (38400 baud) |
-| `offline_timeout` | `5min` | dopo quanto un pannello silenzioso diventa non disponibile |
+| `uart_id` | — | UART connected to the bus (38400 baud) |
+| `offline_timeout` | `5min` | how long a silent panel takes to become unavailable |
 
-**`sensor` / `platform: tigo_rs485`** — esattamente uno tra `long_address` (16 cifre esadecimali) e `node_id`,
-più uno o più tra `power` (W), `voltage_in` (V), `voltage_out` (V), `current` (A), `temperature` (°C),
-`rssi` (valore grezzo 0–255, non dBm), `duty_cycle` (%).
+**`sensor` / `platform: tigo_rs485`** — exactly one of `long_address` (16 hex digits) and `node_id`,
+plus one or more of `power` (W), `voltage_in` (V), `voltage_out` (V), `current` (A), `temperature` (°C),
+`rssi` (raw 0–255 value, not dBm), `duty_cycle` (%).
 
-**`text_sensor` / `platform: tigo_rs485`** — `unconfigured_panels`: pannelli che trasmettono ma non sono configurati.
+**`text_sensor` / `platform: tigo_rs485`** — `unconfigured_panels`: panels that report but are not configured.
 
 ---
 
-## Sviluppo
+## Development
 
-Il decoder del protocollo (`components/tigo_rs485/tigo_protocol.*`) non dipende da ESPHome e si testa sul computer:
+The protocol decoder (`components/tigo_rs485/tigo_protocol.*`) does not depend on ESPHome and is tested on the host:
 
 ```bash
 c++ -std=c++17 -I esphome/components/tigo_rs485 esphome/tests/host_test.cpp esphome/components/tigo_rs485/tigo_protocol.cpp -o host_test
@@ -153,5 +155,5 @@ c++ -std=c++17 -I esphome/components/tigo_rs485 esphome/tests/host_test.cpp esph
 ./host_test issue_20_initial.bin
 ```
 
-Senza argomenti esegue i test sintetici; con una cattura del bus (per esempio quella di
-[taptap](https://github.com/willglynn/taptap), `src/test_data/issue_20_initial.bin`) stampa ogni power report.
+Without arguments it runs the synthetic tests; with a bus capture (for example
+[taptap](https://github.com/willglynn/taptap)'s `src/test_data/issue_20_initial.bin`) it prints every power report.

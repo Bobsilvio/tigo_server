@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Tigo RS485 Monitor – schema di collegamento</title>
+  <defs>
+    <style>
+      .w { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .lbl { font-size: 15px; font-weight: 700; fill: #1d2127; }
+      .sub { font-size: 13px; fill: #5b6270; }
+      .pcb { font-size: 13px; font-weight: 700; fill: #ffffff; }
+      .pcbr { font-size: 13px; font-weight: 700; fill: #ffffff; text-anchor: end; }
+      .tag { font-size: 13px; font-weight: 800; }
+      .num { font-size: 15px; font-weight: 800; fill: #ffffff; text-anchor: middle; }
+      .leg { font-size: 13.5px; fill: #2b2f36; }
+      .legh { font-size: 15px; font-weight: 800; fill: #1d2127; }
+    </style>
+    <g id="screw">
+      <circle r="11" fill="#c7ccd4" stroke="#6b7280" stroke-width="2"/>
+      <line x1="-6" y1="-6" x2="6" y2="6" stroke="#4b5563" stroke-width="2.5"/>
+    </g>
+    <g id="hpin">
+      <rect x="-7" y="-7" width="14" height="14" rx="2" fill="#1f2937"/>
+      <circle r="3.5" fill="#d4af37"/>
+    </g>
+  </defs>
+
+  <!-- Card -->
+  <rect x="1" y="1" width="1198" height="798" rx="18" fill="#f7f8fa" stroke="#d9dde3" stroke-width="2"/>
+  <text x="40" y="50" font-size="26" font-weight="800" fill="#1d2127">Schema di collegamento</text>
+  <text x="40" y="76" font-size="15" fill="#5b6270">ESP32 in sola ricezione sul bus Tigo: tre collegamenti, nessun filo da tagliare</text>
+
+  <!-- ================= BUS TERMINAL BLOCK ================= -->
+  <text x="150" y="168" text-anchor="middle" class="lbl">Bus Tigo</text>
+  <text x="150" y="187" text-anchor="middle" class="sub">cavo CCA ↔ TAP</text>
+  <!-- incoming 4-wire cable -->
+  <g class="w" stroke-width="3">
+    <path d="M40 250 H95" stroke="#d7263d"/>
+    <path d="M40 330 H95" stroke="#22262c"/>
+    <path d="M40 410 H95" stroke="#f08c00"/>
+    <path d="M40 490 H95" stroke="#1c7ed6"/>
+  </g>
+  <text x="40" y="560" class="sub">in parallelo</text>
+  <text x="40" y="577" class="sub">al cavo esistente</text>
+  <!-- block -->
+  <rect x="95" y="210" width="125" height="320" rx="10" fill="#2f9e44" stroke="#1f6f30" stroke-width="2"/>
+  <g>
+    <text x="110" y="255" class="pcb">+V</text><use href="#screw" x="196" y="250"/>
+    <text x="110" y="335" class="pcb">GND</text><use href="#screw" x="196" y="330"/>
+    <text x="110" y="415" class="pcb">A</text><use href="#screw" x="196" y="410"/>
+    <text x="110" y="495" class="pcb">B</text><use href="#screw" x="196" y="490"/>
+  </g>
+
+  <!-- ================= DC-DC ================= -->
+  <text x="505" y="128" text-anchor="middle" class="lbl">Convertitore DC-DC</text>
+  <rect x="380" y="140" width="250" height="120" rx="12" fill="#1f2329" stroke="#0f1115" stroke-width="2"/>
+  <rect x="440" y="160" width="160" height="80" rx="6" fill="#eef0f3"/>
+  <text x="520" y="192" text-anchor="middle" font-size="17" font-weight="800" fill="#1f2329">12/24 V → 5 V</text>
+  <text x="520" y="214" text-anchor="middle" font-size="13" fill="#4b5563">3 A · uscita USB-C</text>
+  <text x="392" y="185" class="pcb" font-size="12">IN+</text>
+  <text x="392" y="225" class="pcb" font-size="12">IN−</text>
+
+  <!-- power wires: bus -> DC-DC -->
+  <path class="w" d="M207 250 H300 V180 H380" stroke="#d7263d"/>
+  <path class="w" d="M207 330 H325 V220 H380" stroke="#22262c"/>
+
+  <!-- USB-C cable: DC-DC -> ESP32 -->
+  <path class="w" d="M630 200 H700 V110 H970 V146" stroke="#4b5563" stroke-width="8"/>
+  <path class="w" d="M630 200 H700 V110 H970 V146" stroke="#9ca3af" stroke-width="3"/>
+  <rect x="770" y="96" width="140" height="28" rx="14" fill="#ffffff" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="840" y="115" text-anchor="middle" class="tag" fill="#374151">USB-C · 5 V</text>
+
+  <!-- ================= RS-485 MODULE ================= -->
+  <rect x="380" y="390" width="250" height="190" rx="12" fill="#c92a2a" stroke="#8f1d1d" stroke-width="2"/>
+  <circle cx="610" cy="410" r="7" fill="#f7f8fa"/><circle cx="610" cy="560" r="7" fill="#f7f8fa"/>
+  <!-- screw terminal (bus side) -->
+  <rect x="380" y="405" width="46" height="150" rx="6" fill="#2f9e44" stroke="#1f6f30" stroke-width="2"/>
+  <use href="#screw" x="403" y="430"/>
+  <use href="#screw" x="403" y="480"/>
+  <use href="#screw" x="403" y="530"/>
+  <text x="436" y="435" class="pcb">A+</text>
+  <text x="436" y="485" class="pcb">B−</text>
+  <text x="436" y="535" class="pcb" opacity="0.75">GND</text>
+  <!-- chip -->
+  <rect x="482" y="455" width="62" height="54" rx="4" fill="#1f2329"/>
+  <text x="513" y="487" text-anchor="middle" font-size="11" font-weight="700" fill="#9ca3af">485</text>
+  <!-- header (TTL side) -->
+  <use href="#hpin" x="630" y="425"/>
+  <use href="#hpin" x="630" y="460"/>
+  <use href="#hpin" x="630" y="495"/>
+  <use href="#hpin" x="630" y="530"/>
+  <text x="614" y="430" class="pcbr">VCC</text>
+  <text x="614" y="465" class="pcbr">GND</text>
+  <text x="614" y="500" class="pcbr">TXD</text>
+  <text x="614" y="535" class="pcbr">RXD</text>
+  <text x="505" y="606" text-anchor="middle" class="lbl">Modulo TTL ↔ RS-485</text>
+  <text x="505" y="625" text-anchor="middle" class="sub">auto-direzione · 3,3–5 V</text>
+
+  <!-- bus signal wires: bus -> module -->
+  <path class="w" d="M207 410 H300 V430 H392" stroke="#f08c00"/>
+  <path class="w" d="M207 490 H345 V480 H392" stroke="#1c7ed6"/>
+
+  <!-- ================= ESP32 ================= -->
+  <rect x="840" y="146" width="260" height="480" rx="14" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+  <rect x="952" y="140" width="36" height="16" rx="5" fill="#9ca3af" stroke="#4b5563" stroke-width="1.5"/>
+  <!-- pin header (decorative + used) -->
+  <g fill="#475569">
+    <circle cx="840" cy="210" r="5"/><circle cx="840" cy="250" r="5"/><circle cx="840" cy="290" r="5"/>
+    <circle cx="840" cy="490" r="5"/><circle cx="840" cy="530" r="5"/><circle cx="840" cy="570" r="5"/>
+  </g>
+  <use href="#hpin" x="840" y="330"/>
+  <use href="#hpin" x="840" y="370"/>
+  <use href="#hpin" x="840" y="410"/>
+  <use href="#hpin" x="840" y="450"/>
+  <text x="858" y="335" class="pcb">3V3</text>
+  <text x="858" y="375" class="pcb">GND</text>
+  <text x="858" y="415" class="pcb">RX</text>
+  <text x="858" y="455" class="pcb">TX</text>
+  <text x="890" y="415" font-size="12" fill="#94a3b8">GPIO 3 / GPIO 16 *</text>
+  <text x="890" y="455" font-size="12" fill="#94a3b8">non usato</text>
+  <!-- module can + antenna -->
+  <rect x="930" y="470" width="150" height="120" rx="6" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="1005" y="527" text-anchor="middle" font-size="17" font-weight="800" fill="#1e293b">ESP32</text>
+  <text x="1005" y="547" text-anchor="middle" font-size="11.5" fill="#475569">WROOM / WROVER</text>
+  <path d="M945 605 h18 v10 h18 v-10 h18 v10 h18 v-10 h18 v10 h18 v-10" fill="none" stroke="#d4af37" stroke-width="3"/>
+
+  <!-- data wires: module -> ESP32 (no crossings) -->
+  <path class="w" d="M637 425 H690 V330 H833" stroke="#e8590c"/>
+  <path class="w" d="M637 460 H720 V370 H833" stroke="#22262c"/>
+  <path class="w" d="M637 495 H750 V410 H833" stroke="#2f9e44"/>
+  <text x="770" y="322" class="tag" fill="#e8590c">3,3 V</text>
+  <text x="770" y="362" class="tag" fill="#22262c">GND</text>
+  <text x="770" y="402" class="tag" fill="#2f9e44">dati</text>
+  <!-- RXD not connected -->
+  <path class="w" d="M637 530 H668" stroke="#9ca3af" stroke-dasharray="3 6"/>
+  <g transform="translate(684 530)">
+    <circle r="11" fill="#ffffff" stroke="#d7263d" stroke-width="2.5"/>
+    <path d="M-5 -5 L5 5 M5 -5 L-5 5" stroke="#d7263d" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+  <text x="702" y="535" font-size="12.5" font-weight="700" fill="#d7263d">non collegare</text>
+
+  <!-- ================= Step markers ================= -->
+  <g>
+    <circle cx="262" cy="214" r="14" fill="#d7263d"/><text x="262" y="219" class="num">1</text>
+    <circle cx="262" cy="452" r="14" fill="#1c7ed6"/><text x="262" y="457" class="num">2</text>
+    <circle cx="790" cy="470" r="14" fill="#2f9e44"/><text x="790" y="475" class="num">3</text>
+  </g>
+
+  <!-- ================= Legend ================= -->
+  <line x1="40" y1="660" x2="1160" y2="660" stroke="#d9dde3" stroke-width="1.5"/>
+  <g>
+    <circle cx="54" cy="690" r="13" fill="#d7263d"/><text x="54" y="695" class="num">1</text>
+    <text x="76" y="695" class="legh">Alimentazione</text>
+    <text x="76" y="718" class="leg">Il DC-DC prende +V e GND dal bus e</text>
+    <text x="76" y="736" class="leg">alimenta l'ESP32 via USB-C. Verifica la</text>
+    <text x="76" y="754" class="leg">tensione del bus: ingresso 12–24 V.</text>
+  </g>
+  <g>
+    <circle cx="430" cy="690" r="13" fill="#1c7ed6"/><text x="430" y="695" class="num">2</text>
+    <text x="452" y="695" class="legh">Bus</text>
+    <text x="452" y="718" class="leg">A e B al modulo RS-485. Il GND del modulo</text>
+    <text x="452" y="736" class="leg">resta libero (massa comune tramite DC-DC);</text>
+    <text x="452" y="754" class="leg">con un DC-DC isolato collegalo al GND del bus.</text>
+  </g>
+  <g>
+    <circle cx="820" cy="690" r="13" fill="#2f9e44"/><text x="820" y="695" class="num">3</text>
+    <text x="842" y="695" class="legh">Dati</text>
+    <text x="842" y="718" class="leg">TXD del modulo → RX dell'ESP32. RXD non</text>
+    <text x="842" y="736" class="leg">collegato: il monitor non trasmette mai.</text>
+    <text x="842" y="754" class="leg">* Arduino: RX_PIN (GPIO 3) · ESPHome: GPIO 16</text>
+  </g>
+</svg>

@@ -1,37 +1,43 @@
 # Tigo RS485 Monitor – Arduino (standalone)
 
-Variante **standalone** di [Tigo RS485 Monitor](../README.md): firmware Arduino per ESP32 che legge il bus RS-485
-tra TAP e CCA e offre una dashboard web propria, un WebSocket e la persistenza su SPIFFS. Non richiede Home Assistant.
+**English** · [Italiano](README.it.md)
 
-Per usarlo con Home Assistant: integrazione [tigosolar-local](https://github.com/Bobsilvio/tigosolar-local),
-sorgente `ESP32_WS` (legge il WebSocket). Se vuoi solo Home Assistant, valuta la variante [ESPHome](../esphome/README.md).
+**Standalone** variant of [Tigo RS485 Monitor](../README.md): Arduino firmware for the ESP32 that reads the RS-485 bus
+between the TAPs and the CCA and provides its own web dashboard, a WebSocket and SPIFFS persistence. No Home
+Assistant required.
+
+To use it with Home Assistant: the [tigosolar-local](https://github.com/Bobsilvio/tigosolar-local) integration,
+`ESP32_WS` source (reads the WebSocket). If you only want Home Assistant, consider the [ESPHome](../esphome/README.md)
+variant.
 
 <img src="../images/home.png" alt="dashboard" width="1000"/>
 <img src="../images/spiffs.png" alt="spiffs" width="1000"/>
+
+The web interface is in Italian.
 
 ---
 
 ## 🛠️ Hardware
 
-| Componente | Note |
+| Component | Notes |
 |---|---|
-| **ESP32 / ESP32-S3** | Flash minimo da 4 MB con partizione SPIFFS |
-| **Convertitore TTL→RS485** | MAX485 o simile |
-| **Regolatore 5 V** | Se alimentato dal bus RS-485 |
+| **ESP32 / ESP32-S3** | At least 4 MB flash with a SPIFFS partition |
+| **TTL→RS485 converter** | MAX485 or similar |
+| **5 V regulator** | When powered from the RS-485 bus |
 
 ---
 
-## ⚙️ Funzionalità
+## ⚙️ Features
 
-- 📡 **Lettura bus RS-485** (Tigo TAP/CCA, 38400 baud 8N1)
-- 🔍 **Parsing frame**: potenza (0x31), topologia (0x09), NodeTable (0x27), stringa `Version` (0x07, per l'ID hardware)
-- 📖 **Protocollo verificato sul firmware del CCA**: decodifica allineata al CCA 4.0.8, dettagli e correzioni a taptap in [docs/PROTOCOL-NOTES.md](../docs/PROTOCOL-NOTES.md)
-- 🌐 **WebServer integrato**:
-  - `/` – Dashboard live con grafici (ApexCharts) e card per modulo
-  - `/debug` – Tabella raw (tensione, corrente, temperatura, RSSI, …)
-  - `/panels` – Mappatura manuale longAddress → etichetta (es. A4)
-  - `/spiffs` – File manager (upload / download / elimina file SPIFFS)
-- 🔌 **WebSocket `/ws`** — aggiornamento real-time; payload per modulo:
+- 📡 **RS-485 bus reading** (Tigo TAP/CCA, 38400 baud 8N1)
+- 🔍 **Frame parsing**: power (0x31), topology (0x09), node table (0x27), `Version` string (0x07, for the hardware ID)
+- 📖 **Protocol verified against the CCA firmware**: decoding matches CCA 4.0.8; details and corrections to taptap in [docs/PROTOCOL-NOTES.md](../docs/PROTOCOL-NOTES.md)
+- 🌐 **Built-in web server**:
+  - `/` – Live dashboard with charts (ApexCharts) and one card per module
+  - `/debug` – Raw table (voltage, current, temperature, RSSI, …)
+  - `/panels` – Manual long address → label mapping (e.g. A4)
+  - `/spiffs` – File manager (upload / download / delete SPIFFS files)
+- 🔌 **WebSocket `/ws`** — real-time updates; payload per module:
   ```json
   {
     "id":       "A4",
@@ -50,123 +56,121 @@ sorgente `ESP32_WS` (legge il WebSocket). Se vuoi solo Home Assistant, valuta la
     "hwid":     45
   }
   ```
-  `watt` = `vin` × `amp` (potenza in ingresso all'ottimizzatore). `rssi` è il valore grezzo 0–255, non dBm.
-  `hwid` = ID hardware del modulo letto dalla risposta `Version` (es. `Mnode Version K8.0120 (2D)` → 0x2D), `-1` finché non visto.
-  La scala della corrente dipende da `hwid` come nel CCA: ≤ 0x23 → 0,0025 A; 0x24–0x5F → 0,005 A; > 0x5F → 0,025 A
-  (senza `hwid` si usa 0,005 A). `temp` si aggiorna solo quando il bit 0x20 della status word lo marca come temperatura.
-  Se un modulo non invia dati da 5 minuti: `online: false` e `watt`/`vin`/`vout`/`amp` a 0. `age` = secondi dall'ultimo dato (`-1` = mai ricevuto).
-- 💾 **NodeTable** — salvataggio automatico con debounce 30 s (`/nodetable.json`, include l'`hwid` di ogni modulo)
-- 🔖 **Panel Map** — associazione persistente longAddress → etichetta (`/panel_map.json`)
-- 🕒 **NTP sync** — orario preciso alla sincronizzazione; senza internet l'avvio prosegue dopo 10 s
-- 🧵 **Accesso concorrente sicuro** — i dati condivisi tra lettura RS-485 e pagine web sono protetti da un mutex; buffer di ricezione RS-485 da 4 KB
-- 🔁 **OTA** — aggiornamento firmware via rete
-- 📊 **Dashboard grafica**:
-  - Grafico area — potenza totale nel tempo (ultimi 60 campioni, in-memory)
-  - Grafico a barre orizzontali — potenza istantanea per pannello, colorato W→verde
-  - Card per ogni modulo con barra di progresso, Vin/Vout, corrente, temperatura, RSSI
+  `watt` = `vin` × `amp` (optimizer input power). `rssi` is the raw 0–255 value, not dBm.
+  `hwid` = module hardware ID read from the `Version` answer (e.g. `Mnode Version K8.0120 (2D)` → 0x2D), `-1` until seen.
+  The current scale depends on `hwid` as in the CCA: ≤ 0x23 → 0.0025 A; 0x24–0x5F → 0.005 A; > 0x5F → 0.025 A
+  (0.005 A without `hwid`). `temp` is updated only when bit 0x20 of the status word marks it as a temperature.
+  When a module sends nothing for 5 minutes: `online: false` and `watt`/`vin`/`vout`/`amp` at 0. `age` = seconds since the last data (`-1` = never received).
+- 💾 **Node table** — automatic save with a 30 s debounce (`/nodetable.json`, includes each module's `hwid`)
+- 🔖 **Panel map** — persistent long address → label mapping (`/panel_map.json`)
+- 🕒 **NTP sync** — accurate time once synced; without internet, boot continues after 10 s
+- 🧵 **Safe concurrent access** — data shared between RS-485 decoding and the web pages is protected by a mutex; 4 KB RS-485 receive buffer
+- 🔁 **OTA** — firmware updates over the network
+- 📊 **Graphical dashboard**:
+  - Area chart — total power over time (last 60 samples, in memory)
+  - Horizontal bar chart — instant power per panel, coloured by watts
+  - One card per module with progress bar, Vin/Vout, current, temperature, RSSI
 
 ---
 
-## 📂 File SPIFFS
+## 📂 SPIFFS files
 
-| File | Descrizione |
+| File | Description |
 |---|---|
-| `index.html` | Dashboard web |
-| `nodetable.json` | Mapping addr corto ↔ longAddress (auto-generato) |
-| `panel_map.json` | Mapping longAddress ↔ etichetta pannello (gestito da `/panels`) |
+| `index.html` | Web dashboard |
+| `nodetable.json` | Short addr ↔ long address mapping (generated automatically) |
+| `panel_map.json` | Long address ↔ panel label mapping (managed from `/panels`) |
 
 ---
 
-## 🔖 Mappatura pannelli
+## 🔖 Panel mapping
 
-Vai su `/panels`: ogni riga mostra il longAddress del modulo (es. `04C05B4000B1A688`).  
-Scrivi l'etichetta (es. `A4`) e clicca **Salva**.  
-Da quel momento il WebSocket trasmette `"panel": "A4"` e `"id": "A4"` per quel modulo.  
-Il longAddress rimane sempre disponibile nei campi `barcode` e `longaddr`.
-
----
-
-## 🔄 Salvataggio automatico NodeTable
-
-La `loop()` controlla ogni ciclo: se `NodeTable_changed == true` e sono passati ≥ 30 s  
-dall'ultimo salvataggio → chiama `saveNodeTable()` e resetta il flag.  
-Il salvataggio manuale è disponibile su `/debug` → bottone **Salva NodeTable ora**.
+Go to `/panels`: each row shows a module's long address (e.g. `04C05B4000B1A688`).
+Type the label (e.g. `A4`) and click **Salva** (Save).
+From then on the WebSocket sends `"panel": "A4"` and `"id": "A4"` for that module.
+The long address is always available in the `barcode` and `longaddr` fields.
 
 ---
 
-## 🧰 Installazione (Arduino IDE)
+## 🔄 Automatic node table save
 
-### 1. Prerequisiti
+`loop()` checks on every pass: if `NodeTable_changed == true` and at least 30 s have passed
+since the last save → it calls `saveNodeTable()` and clears the flag.
+A manual save is available on `/debug` → **Salva NodeTable ora** button.
+
+---
+
+## 🧰 Installation (Arduino IDE)
+
+### 1. Prerequisites
 - **Arduino IDE 2.x**
-- Supporto schede ESP32:  
-  *File → Preferenze → URL aggiuntivi*:
+- ESP32 board support:
+  *File → Preferences → Additional boards manager URLs*:
   ```
   https://espressif.github.io/arduino-esp32/package_esp32_index.json
   ```
-  Poi: *Strumenti → Scheda → Gestore schede → "esp32" → Installa*
+  Then: *Tools → Board → Boards Manager → "esp32" → Install*
 
-### 2. Librerie richieste
-Installa via *Sketch → Includi libreria → Gestisci librerie*:
-- **ArduinoJson** (Benoit Blanchon) — versione 6 o 7
+### 2. Required libraries
+Install via *Sketch → Include Library → Manage Libraries*:
+- **ArduinoJson** (Benoit Blanchon) — version 6 or 7
 - **ESPAsyncWebServer** + **AsyncTCP**
 - **PubSubClient** (MQTT)
 - **WebSerial**
 
-### 3. Configurazione scheda
-*Strumenti*:
-- **Board:** `ESP32 Dev Module` (o variante S3)
+### 3. Board settings
+*Tools*:
+- **Board:** `ESP32 Dev Module` (or an S3 variant)
 - **Partition Scheme:** `No OTA (1MB APP / 3MB SPIFFS)`
 - **Upload Speed:** 921600
 
-### 4. Apri lo sketch, Wi-Fi e pin
-Apri `arduino/TigoServer/TigoServer.ino` (la cartella dello sketch deve chiamarsi `TigoServer`, la cartella `data/`
-accanto contiene i file SPIFFS). In cima al file:
+### 4. Open the sketch, Wi-Fi and pins
+Open `arduino/TigoServer/TigoServer.ino` (the sketch folder must be named `TigoServer`; the `data/` folder next to
+it holds the SPIFFS files). At the top of the file:
 ```cpp
-const char* ssid     = "TuaReteWiFi";
-const char* password = "TuaPassword";
-#define RX_PIN 3  // pin collegato a RO del convertitore RS-485
+const char* ssid     = "YourWiFi";
+const char* password = "YourPassword";
+#define RX_PIN 3  // pin wired to the RS-485 converter's data output
 #define TX_PIN 1
 ```
-Imposta `RX_PIN`/`TX_PIN` sui pin che hai cablato: lo schema qui sotto usa GPIO 16/17, il valore predefinito nel
-codice è 3/1 (gli stessi della seriale USB).
+Set `RX_PIN`/`TX_PIN` to the pins you wired. The default in the code is 3/1, the same pins as the USB serial port.
 
-### 5. Flash firmware
-1. Collega ESP32 via USB
-2. Clicca **→ Carica**
-3. Apri *Monitor Seriale* (115200 baud)
+### 5. Flash the firmware
+1. Connect the ESP32 over USB
+2. Click **→ Upload**
+3. Open the *Serial Monitor* (115200 baud)
 
-### 6. Carica i file SPIFFS
-Installa il plugin **ESP32 Sketch Data Upload**:  
-→ [https://github.com/me-no-dev/arduino-esp32fs-plugin](https://github.com/me-no-dev/arduino-esp32fs-plugin)  
-Poi: *Strumenti → ESP32 Sketch Data Upload*
+### 6. Upload the SPIFFS files
+Install the **ESP32 Sketch Data Upload** plugin:
+→ [https://github.com/me-no-dev/arduino-esp32fs-plugin](https://github.com/me-no-dev/arduino-esp32fs-plugin)
+Then: *Tools → ESP32 Sketch Data Upload*
 
-### 7. Primo accesso
-Trova l'IP in Serial Monitor o nel router DHCP:
+### 7. First access
+Find the IP in the Serial Monitor or in your router's DHCP list:
 ```
-http://<IP_ESP32>
+http://<ESP32_IP>
 ```
-- `/` — Dashboard + grafici
-- `/debug` — Dati raw + NodeTable
-- `/panels` — Mappatura etichette
+- `/` — Dashboard + charts
+- `/debug` — Raw data + node table
+- `/panels` — Label mapping
 - `/spiffs` — File manager
 
 ---
 
-## ⚡ Schema di collegamento
+## ⚡ Wiring
 
-<img src="../images/wiring.svg" alt="Schema di collegamento" width="900"/>
+<img src="../images/wiring.svg" alt="Wiring diagram" width="900"/>
 
-| Modulo RS-485 | ESP32 / bus | Note |
+| RS-485 module | ESP32 / bus | Notes |
 |---|---|---|
 | VCC | 3V3 | |
 | GND | GND | |
-| TXD | `RX_PIN` (predefinito GPIO 3) | dati dal bus verso l'ESP32 |
-| RXD | non collegato | il monitor non trasmette |
-| A (D+) / B (D−) | A / B del bus TAP ↔ CCA | in parallelo |
+| TXD | `RX_PIN` (default GPIO 3) | data from the bus to the ESP32 |
+| RXD | not connected | the monitor never transmits |
+| A (D+) / B (D−) | A / B of the TAP ↔ CCA bus | in parallel |
 
-L'ESP32 è alimentato in USB-C da un convertitore DC-DC 12/24 V → 5 V collegato a +V/GND del bus.
+The ESP32 is powered over USB-C by a 12/24 V → 5 V DC-DC converter connected to +V/GND of the bus.
 
 ---
 
-Crediti e licenza: vedi il [README principale](../README.md).
-
+Credits and license: see the [main README](../README.md).
