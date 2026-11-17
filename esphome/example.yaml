@@ -1,0 +1,108 @@
+# Tigo RS485 Monitor - ESPHome example
+#
+# Wiring: RS-485 transceiver in receive-only mode (RE/DE to GND), A/B in parallel
+# with the TAP <-> CCA bus, RO -> rx_pin. The ESP32 never transmits on the bus.
+
+esphome:
+  name: tigo-rs485
+  friendly_name: Tigo RS485
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  # Avoid sharing UART0 with the bus
+  baud_rate: 115200
+
+api:
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  # ESPHome finds the esphome/components folder of the repository by itself
+  - source: github://Bobsilvio/tigo_server@main
+    components: [tigo_rs485]
+    # To use a local copy instead:
+    # source:
+    #   type: local
+    #   path: components
+
+uart:
+  id: tigo_bus
+  rx_pin: GPIO16
+  baud_rate: 38400
+  rx_buffer_size: 2048
+
+tigo_rs485:
+  uart_id: tigo_bus
+  offline_timeout: 5min
+
+text_sensor:
+  # Long addresses of panels that report but are not configured below:
+  # copy them into a "long_address:" entry.
+  - platform: tigo_rs485
+    unconfigured_panels:
+      name: Unconfigured panels
+
+sensor:
+  # One block per optimizer. Use the long address (stable, fixed in hardware).
+  - platform: tigo_rs485
+    long_address: "04C05B4000B1A688"
+    power:
+      name: A1 Power
+      id: a1_power
+    voltage_in:
+      name: A1 Voltage In
+    voltage_out:
+      name: A1 Voltage Out
+    current:
+      name: A1 Current
+    temperature:
+      name: A1 Temperature
+    rssi:
+      name: A1 RSSI
+    duty_cycle:
+      name: A1 Duty Cycle
+
+  - platform: tigo_rs485
+    long_address: "04C05B4000B1A689"
+    power:
+      name: A2 Power
+      id: a2_power
+
+  # Fallback when the long address is not known yet: the short node ID assigned
+  # by the CCA (it can change after a rediscovery).
+  # - platform: tigo_rs485
+  #   node_id: 0x001C
+  #   power:
+  #     name: A3 Power
+
+  # Energy per panel, integrated on the device
+  - platform: integration
+    name: A1 Energy
+    sensor: a1_power
+    time_unit: h
+    unit_of_measurement: Wh
+    device_class: energy
+    state_class: total_increasing
+    restore: true
+
+  # Total power of the configured panels
+  - platform: template
+    name: Total Power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      float total = 0;
+      for (auto *s : {id(a1_power), id(a2_power)})
+        if (!std::isnan(s->state)) total += s->state;
+      return total;

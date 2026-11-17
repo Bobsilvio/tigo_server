@@ -2,7 +2,7 @@
 
 Notes on how the Tigo CCA decodes and builds the RS-485 gateway traffic, and where
 [willglynn/taptap](https://github.com/willglynn/taptap) — the protocol reference this
-firmware is based on — is wrong or incomplete.
+project started from — is wrong or incomplete.
 
 ## Method and sources
 
@@ -187,8 +187,8 @@ not a counter.
 
 The CCA logs `%04X starting TUID, %u number of records`: the response starts with a 16-bit
 start node ID, then the entry count. Upstream taptap omits the start field;
-[litinoveweedle/taptap](https://github.com/litinoveweedle/taptap) already fixed this. This
-firmware (`process27frame`) skips it correctly.
+[litinoveweedle/taptap](https://github.com/litinoveweedle/taptap) already fixed this. Both
+variants of this project read it correctly.
 
 ## Gateway frame types
 
@@ -241,14 +241,19 @@ Confirmed correct in taptap: Vin × 0.05, Vout × 0.1, duty cycle byte, the fiel
 and RSSI positions. The escaping scheme and frame CRC were checked on the capture only
 (11 638 frames, no CRC error), not in the firmware.
 
-## What this firmware does with it
+## What this project does with it
 
-- `watt = vin × amp`.
-- Iin scale chosen from the hardware ID, read from passing Version answers, stored in
-  `nodetable.json` (`hwid`) and sent on the WebSocket. Until it is seen, 0.005 A is assumed
-  (unlike the CCA, which shows nothing).
-- Temperature updated only when bit `0x20` is set; the last valid value is kept otherwise.
+Both variants (Arduino `arduino/TigoServer`, ESPHome `esphome/components/tigo_rs485`):
+
+- Power = Vin × Iin.
+- Iin scale chosen from the hardware ID, read from passing Version answers and persisted
+  (Arduino: `nodetable.json`, `hwid`; ESPHome: flash preferences). Until it is seen, 0.005 A
+  is assumed (unlike the CCA, which shows nothing).
+- Temperature updated only when bit `0x20` is set.
 - RSSI 0 ignored.
+
+The ESPHome decoder (`tigo_protocol.cpp`) is independent of ESPHome and is tested on the host
+against taptap's capture: all 716 power reports match an independent reference decoder.
 
 ## Still unknown
 

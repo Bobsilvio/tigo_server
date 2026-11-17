@@ -1,0 +1,5 @@
+.DS_Store
+__pycache__/
+# ESPHome build output and local secrets
+.esphome/
+secrets.yaml
