@@ -21,7 +21,8 @@ Legge il bus RS-485 (protocollo TAP) e fornisce una dashboard web, WebSocket e p
 ## ⚙️ Funzionalità
 
 - 📡 **Lettura bus RS-485** (Tigo TAP/CCA, 38400 baud 8N1)
-- 🔍 **Parsing frame**: potenza (0x31), topologia (0x09), NodeTable (0x27)
+- 🔍 **Parsing frame**: potenza (0x31), topologia (0x09), NodeTable (0x27), stringa `Version` (0x07, per l'ID hardware)
+- 📖 **Protocollo verificato sul firmware del CCA**: decodifica allineata al CCA 4.0.8, dettagli e correzioni a taptap in [docs/PROTOCOL-NOTES.md](docs/PROTOCOL-NOTES.md)
 - 🌐 **WebServer integrato**:
   - `/` – Dashboard live con grafici (ApexCharts) e card per modulo
   - `/debug` – Tabella raw (tensione, corrente, temperatura, RSSI, …)
@@ -51,9 +52,10 @@ Legge il bus RS-485 (protocollo TAP) e fornisce una dashboard web, WebSocket e p
   La scala della corrente dipende da `hwid` come nel CCA: ≤ 0x23 → 0,0025 A; 0x24–0x5F → 0,005 A; > 0x5F → 0,025 A
   (senza `hwid` si usa 0,005 A). `temp` si aggiorna solo quando il bit 0x20 della status word lo marca come temperatura.
   Se un modulo non invia dati da 5 minuti: `online: false` e `watt`/`vin`/`vout`/`amp` a 0. `age` = secondi dall'ultimo dato (`-1` = mai ricevuto).
-- 💾 **NodeTable** — salvataggio automatico con debounce 30 s (`/nodetable.json`)
+- 💾 **NodeTable** — salvataggio automatico con debounce 30 s (`/nodetable.json`, include l'`hwid` di ogni modulo)
 - 🔖 **Panel Map** — associazione persistente longAddress → etichetta (`/panel_map.json`)
-- 🕒 **NTP sync** — orario preciso alla sincronizzazione
+- 🕒 **NTP sync** — orario preciso alla sincronizzazione; senza internet l'avvio prosegue dopo 10 s
+- 🧵 **Accesso concorrente sicuro** — i dati condivisi tra lettura RS-485 e pagine web sono protetti da un mutex; buffer di ricezione RS-485 da 4 KB
 - 🔁 **OTA** — aggiornamento firmware via rete
 - 📊 **Dashboard grafica**:
   - Grafico area — potenza totale nel tempo (ultimi 60 campioni, in-memory)
@@ -102,7 +104,7 @@ Il salvataggio manuale è disponibile su `/debug` → bottone **Salva NodeTable 
 
 ### 2. Librerie richieste
 Installa via *Sketch → Includi libreria → Gestisci librerie*:
-- **ArduinoJson** (Benoit Blanchon)
+- **ArduinoJson** (Benoit Blanchon) — versione 6 o 7
 - **ESPAsyncWebServer** + **AsyncTCP**
 - **PubSubClient** (MQTT)
 - **WebSerial**
