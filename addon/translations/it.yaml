@@ -1,0 +1,16 @@
+configuration:
+  host:
+    name: Indirizzo ESP32
+    description: Indirizzo IP (o nome) del dispositivo ESPHome con tigo_rs485, ad esempio 192.168.1.50
+  port:
+    name: Porta
+    description: Porta del web_server ESPHome (80 se non l'hai cambiata)
+  username:
+    name: Utente
+    description: Solo se web_server ha auth
+  password:
+    name: Password
+    description: Solo se web_server ha auth
+  retention_days:
+    name: Storico (giorni)
+    description: Quanti giorni di energia oraria conservare

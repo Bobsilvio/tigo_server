@@ -144,6 +144,11 @@ internet) e funziona da telefono e da computer, in italiano o in inglese, con te
 - Se `web_server` ha `auth:`, dashboard ed endpoint JSON chiedono le stesse credenziali.
 - `web_dashboard: false` lascia su `/` la pagina standard di ESPHome.
 
+### Nella sidebar di Home Assistant
+
+L'[add-on](../addon/README.it.md) mette la stessa dashboard nella sidebar di Home Assistant, raggiungibile da remoto
+e nell'app, e registra l'energia di ogni pannello ora per ora: il tab Analisi guadagna 7 giorni, 30 giorni e 12 mesi.
+
 ---
 
 ## Nomi fissi nel YAML (opzionale)

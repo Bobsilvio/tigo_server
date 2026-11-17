@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tigo RS485 Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='%23ffb22e'/%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#070b14;--ink2:#0c1322;--card:rgba(18,27,46,.62);--card2:rgba(26,38,62,.7);--line:rgba(148,170,214,.14);--line2:rgba(148,170,214,.26);
+  --text:#eef2fa;--mute:#8b98b4;--dim:#5d6984;
+  --sun:#ffb22e;--sun2:#ff7a1a;--sun3:#ffe08a;--good:#3ddc97;--warn:#ffcf4a;--bad:#ff5d6c;--cool:#5ab8ff;
+  --glow:0 0 0 1px rgba(255,178,46,.18),0 18px 60px -20px rgba(255,140,30,.45);
+  --num:"SF Mono","JetBrains Mono","Cascadia Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+  --disp:"Avenir Next Condensed","DIN Alternate","Bahnschrift","Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Avenir Next","Segoe UI Variable","Segoe UI","Helvetica Neue",sans-serif;
+  color-scheme:dark;
+}
+:root[data-theme=light]{
+  --ink:#f3efe6;--ink2:#ebe5d8;--card:rgba(255,255,255,.72);--card2:rgba(255,255,255,.9);--line:rgba(60,48,20,.12);--line2:rgba(60,48,20,.22);
+  --text:#1c1a16;--mute:#6f6758;--dim:#a19885;--sun:#e8890c;--sun2:#d4540a;--sun3:#b86b00;--good:#119a63;--warn:#c48a00;--bad:#d83545;--cool:#1f7fd1;
+  --glow:0 0 0 1px rgba(232,137,12,.2),0 18px 50px -24px rgba(200,110,10,.35);color-scheme:light;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--ink);color:var(--text);font:15px/1.45 var(--body);-webkit-font-smoothing:antialiased}
+body{min-height:100vh;overflow-x:hidden}
+body:before{content:"";position:fixed;inset:-20vh -10vw auto;height:90vh;pointer-events:none;z-index:0;
+  background:radial-gradient(60% 55% at 78% 0%,rgba(255,150,40,.22),transparent 70%),radial-gradient(45% 40% at 8% 10%,rgba(70,120,255,.14),transparent 70%)}
+:root[data-theme=light] body:before{background:radial-gradient(60% 55% at 78% 0%,rgba(255,170,60,.35),transparent 70%),radial-gradient(45% 40% at 8% 10%,rgba(120,160,255,.15),transparent 70%)}
+body:after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:64px 64px;
+  mask-image:radial-gradient(70% 60% at 50% 0%,#000,transparent)}
+.wrap{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:22px 20px 60px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+
+/* header */
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+.logo{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(140deg,var(--sun3),var(--sun2));box-shadow:0 8px 30px -8px var(--sun2)}
+.logo svg{width:22px;height:22px}
+.brand h1{font:700 21px/1 var(--disp);letter-spacing:.02em;text-transform:uppercase}
+.brand small{display:block;color:var(--mute);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-top:3px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:99px;border:1px solid var(--line2);background:var(--card);backdrop-filter:blur(12px);font-size:12.5px;color:var(--mute)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 var(--good);animation:ping 2s infinite}
+.dot.off{background:var(--bad);animation:none}.dot.demo{background:var(--cool)}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(61,220,151,.6)}80%,100%{box-shadow:0 0 0 9px rgba(61,220,151,0)}}
+.ibtn{height:34px;min-width:34px;padding:0 11px;border-radius:10px;border:1px solid var(--line2);background:var(--card);backdrop-filter:blur(12px);font-size:12.5px;font-weight:600;color:var(--mute);transition:.2s}
+.ibtn:hover{color:var(--text);border-color:var(--sun)}
+nav{display:flex;gap:4px;padding:4px;border-radius:13px;border:1px solid var(--line);background:var(--card);backdrop-filter:blur(12px);margin-bottom:20px;width:max-content;max-width:100%;overflow-x:auto}
+nav button{padding:8px 16px;border-radius:9px;font-weight:600;font-size:13.5px;color:var(--mute);white-space:nowrap;transition:.25s}
+nav button.on{color:#1a1206;background:linear-gradient(140deg,var(--sun3),var(--sun));box-shadow:0 6px 20px -8px var(--sun2)}
+:root[data-theme=light] nav button.on{color:#fff}
+
+/* cards */
+.card{position:relative;border:1px solid var(--line);background:var(--card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:20px;padding:20px}
+.card h2{font:700 13px/1 var(--disp);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.card h2 .x{margin-left:auto;font:500 12px var(--body);letter-spacing:0;text-transform:none;color:var(--dim)}
+.grid{display:grid;gap:16px}
+.reveal{animation:rise .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(300px,1.05fr) 2fr;gap:16px}
+.sun{overflow:hidden;box-shadow:var(--glow);display:flex;flex-direction:column;justify-content:space-between;min-height:290px}
+.sun:before{content:"";position:absolute;right:-90px;top:-90px;width:300px;height:300px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,200,90,.55),rgba(255,120,30,.18) 45%,transparent 70%);filter:blur(4px);animation:breathe 6s ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(1.08);opacity:.8}}
+.big{font:600 clamp(52px,7vw,84px)/.9 var(--num);letter-spacing:-.05em;position:relative}
+.big .u{font:600 .34em var(--disp);letter-spacing:.04em;color:var(--sun);margin-left:6px}
+.arc{position:relative;margin:6px auto 0;width:100%;max-width:360px}
+.arc svg{width:100%;height:auto;display:block}
+.subs{display:flex;gap:18px;flex-wrap:wrap;position:relative;color:var(--mute);font-size:13px}
+.subs b{display:block;color:var(--text);font:600 18px var(--num)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.kpi{padding:16px 18px}
+.kpi .l{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.kpi .v{font:600 28px/1.1 var(--num);margin-top:8px;letter-spacing:-.03em}
+.kpi .v small{font:600 13px var(--disp);color:var(--mute);margin-left:4px;letter-spacing:.04em}
+.kpi .h{font-size:12px;color:var(--dim);margin-top:4px}
+.right{display:grid;gap:16px;grid-template-rows:auto 1fr}
+
+/* array */
+.array{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px}
+.cell{--a:0;position:relative;aspect-ratio:1/1.32;border-radius:14px;padding:12px;text-align:left;overflow:hidden;
+  border:1px solid rgba(120,150,210,calc(.18 + var(--a)*.5));
+  background:linear-gradient(160deg,rgba(28,46,88,.92),rgba(10,18,36,.95));
+  box-shadow:0 0 calc(var(--a)*38px) calc(var(--a)*-6px) rgba(255,170,50,calc(var(--a)*.9)),inset 0 1px 0 rgba(255,255,255,.06);
+  transition:box-shadow .8s,border-color .8s,transform .25s;display:flex;flex-direction:column}
+.cell:hover{transform:translateY(-3px)}
+.cell:before{content:"";position:absolute;inset:0;opacity:.55;
+  background-image:linear-gradient(rgba(170,200,255,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(170,200,255,.16) 1px,transparent 1px);background-size:100% 16.66%,33.33% 100%}
+.cell:after{content:"";position:absolute;inset:0;background:radial-gradient(120% 70% at 50% 0%,rgba(255,196,80,calc(var(--a)*var(--a)*.42)),transparent 70%),linear-gradient(0deg,rgba(255,120,30,calc(var(--a)*.16)),transparent 60%);mix-blend-mode:screen;transition:.8s}
+.cell>*{position:relative;z-index:1}
+.cell .shine{position:absolute;inset:-40% -60%;z-index:1;background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.16) 50%,transparent 58%);transform:translateX(-60%);animation:shine 7s ease-in-out infinite;pointer-events:none}
+@keyframes shine{60%,100%{transform:translateX(60%)}}
+.cell .nm{font:700 15px/1 var(--disp);letter-spacing:.05em;color:#fff}
+.cell .w{margin-top:auto;font:600 26px/1 var(--num);color:#fff;letter-spacing:-.04em;text-shadow:0 2px 18px rgba(0,0,0,.4)}
+.cell .w small{font:600 11px var(--disp);opacity:.75;margin-left:3px}
+.cell .meta{font:500 11px var(--num);color:rgba(230,236,250,.72);margin-top:6px;display:flex;justify-content:space-between}
+.cell .bar{height:3px;border-radius:3px;background:rgba(255,255,255,.12);margin-top:8px;overflow:hidden}
+.cell .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--sun3),var(--sun));border-radius:3px;transition:width .8s}
+.cell .tag{position:absolute;top:10px;right:10px;font:700 10px var(--body);letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:6px;background:rgba(255,93,108,.9);color:#fff;z-index:2}
+.cell .tag.cold{background:rgba(90,184,255,.85)}
+.cell.off{filter:grayscale(1) brightness(.6)}
+.cell.off .shine{display:none}
+.cell.off .w{font-size:15px;color:var(--mute)}
+
+/* charts */
+.chart svg{width:100%;display:block;overflow:visible}
+.chart text{font:11px var(--num);fill:var(--dim)}
+.seg{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.seg button{padding:7px 14px;border-radius:9px;font:600 13px var(--num);color:var(--mute);border:1px solid var(--line);background:var(--card);backdrop-filter:blur(12px);transition:.2s}
+.seg button.on{color:var(--text);border-color:var(--sun);box-shadow:inset 0 0 0 1px var(--sun)}
+.seg .since{margin-left:auto;font-size:12px;color:var(--dim)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:12px;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.two{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+.heat{display:grid;gap:3px}
+.heat .row{display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:center}
+.heat .lab{font:600 11.5px var(--disp);letter-spacing:.04em;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.heat .cells{display:grid;grid-template-columns:repeat(96,1fr);gap:1px;height:14px}
+.heat .cells i{border-radius:2px}
+.axis{display:flex;justify-content:space-between;margin:6px 0 0 78px;font:10.5px var(--num);color:var(--dim)}
+
+/* analysis */
+.rank{display:grid;gap:8px}
+.rk{display:grid;grid-template-columns:22px 70px 1fr 84px 56px;gap:10px;align-items:center;font-size:13px;cursor:pointer}
+.rk .pos{font:600 12px var(--num);color:var(--dim)}
+.rk .nm{font:700 13px var(--disp);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk .tr{height:10px;border-radius:5px;background:var(--line);overflow:hidden;position:relative}
+.rk .tr i{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,var(--sun2),var(--sun3));transition:width .8s}
+.rk .tr b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--text);opacity:.5}
+.rk .val{font:600 12.5px var(--num);text-align:right;white-space:nowrap}
+.rk .dev{font:600 12px var(--num);text-align:right}
+.pos-c{color:var(--good)}.neg-c{color:var(--bad)}.mid-c{color:var(--mute)}
+.ins{display:grid;gap:10px}
+.in{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--card2);border:1px solid var(--line)}
+.in .ic{flex:none;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:15px}
+.in.bad .ic{background:rgba(255,93,108,.16);color:var(--bad)}.in.warn .ic{background:rgba(255,207,74,.16);color:var(--warn)}
+.in.good .ic{background:rgba(61,220,151,.16);color:var(--good)}.in.info .ic{background:rgba(90,184,255,.16);color:var(--cool)}
+.in b{display:block;font-size:13.5px}.in span{font-size:12.5px;color:var(--mute)}
+.gauge{display:flex;align-items:center;gap:18px}
+.gauge svg{width:120px;height:120px;flex:none}
+
+/* table */
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+th{font:700 11px var(--disp);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);text-align:right;padding:10px 12px;border-bottom:1px solid var(--line2);cursor:pointer;user-select:none}
+th:first-child,td:first-child{text-align:left}
+th.s:after{content:" ↓";color:var(--sun)}th.s.asc:after{content:" ↑"}
+td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--num);font-size:12.5px}
+td:first-child{font:700 13px var(--disp);letter-spacing:.04em}
+tr:hover td{background:rgba(255,178,46,.05)}
+tr{cursor:pointer}
+.st{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;background:var(--good)}.st.off{background:var(--bad)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:9px 15px;border-radius:11px;font-weight:600;font-size:13px;border:1px solid var(--line2);background:var(--card2);transition:.2s}
+.btn:hover{border-color:var(--sun)}
+.btn.dng{color:var(--bad);border-color:rgba(255,93,108,.35)}
+.btn.dng:hover{background:rgba(255,93,108,.1)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:600 12.5px var(--num);padding:7px 10px;border-radius:9px;background:var(--card2);border:1px dashed var(--line2);display:inline-flex;gap:8px;align-items:center}
+.chip button{color:var(--sun);font-size:11.5px;font-family:var(--body)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:13px}
+.kv dt{color:var(--mute)}.kv dd{font-family:var(--num);text-align:right}
+.empty{color:var(--dim);font-size:13px;padding:18px 0;text-align:center}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(3,6,12,.55);backdrop-filter:blur(3px);z-index:20;opacity:0;pointer-events:none;transition:.3s}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:21;background:var(--ink2);border-left:1px solid var(--line2);padding:24px;overflow-y:auto;transform:translateX(102%);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.drawer.on{transform:none}
+.drawer h3{font:700 30px/1 var(--disp);letter-spacing:.03em}
+.drawer .addr{font:12px var(--num);color:var(--mute);margin:6px 0 18px;word-break:break-all}
+.mini{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.mini div{padding:12px;border-radius:12px;background:var(--card);border:1px solid var(--line)}
+.mini small{display:block;font-size:11px;color:var(--mute);letter-spacing:.08em;text-transform:uppercase}
+.mini b{font:600 20px var(--num)}
+.close{position:absolute;top:18px;right:18px}
+.drawer h2{font:700 13px/1 var(--disp);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:18px 0 10px}
+footer{margin-top:28px;color:var(--dim);font-size:12px;display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
+footer a{color:var(--mute)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,30px);opacity:0;background:var(--card2);border:1px solid var(--line2);padding:10px 16px;border-radius:12px;font-size:13px;z-index:30;transition:.3s;backdrop-filter:blur(12px)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+[hidden]{display:none!important}
+
+@media (max-width:1050px){.hero,.two{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.wrap{padding:16px 12px 40px}.array{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}.cell .w{font-size:20px}.rk{grid-template-columns:18px 54px 1fr 60px 50px;gap:6px}.kpi .v{font-size:22px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#2a1600" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2" fill="#2a1600" stroke="none"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></div>
+      <div><h1>Tigo RS485 Monitor</h1><small id="sub">ESPHome</small></div>
+    </div>
+    <span class="pill"><i class="dot" id="dot"></i><span id="status">…</span></span>
+    <button class="ibtn" id="lang">IT</button>
+    <button class="ibtn" id="theme" aria-label="theme">◐</button>
+    <a class="ibtn" id="espui" href="/?esphome" style="display:inline-grid;place-items:center;text-decoration:none" data-t="esphome"></a>
+  </header>
+
+  <nav id="tabs">
+    <button data-tab="ov" class="on" data-t="tOv"></button>
+    <button data-tab="an" data-t="tAn"></button>
+    <button data-tab="pn" data-t="tPn"></button>
+    <button data-tab="sy" data-t="tSy"></button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section id="ov" class="grid">
+    <div class="hero">
+      <div class="card sun reveal">
+        <h2 data-t="now"></h2>
+        <div class="big num"><span id="tot">0</span><span class="u">W</span></div>
+        <div class="arc"><svg viewBox="0 0 300 120" id="arc"></svg></div>
+        <div class="subs">
+          <div><span data-t="peak"></span><b id="peak">–</b></div>
+          <div><span data-t="e24"></span><b id="e24">–</b></div>
+          <div><span data-t="avgp"></span><b id="avgp">–</b></div>
+        </div>
+      </div>
+      <div class="right">
+        <div class="kpis">
+          <div class="card kpi reveal" style="animation-delay:.05s"><div class="l" data-t="online"></div><div class="v num" id="kOn">–</div><div class="h" id="kOnH"></div></div>
+          <div class="card kpi reveal" style="animation-delay:.1s"><div class="l" data-t="mismatch"></div><div class="v num" id="kMm">–</div><div class="h" id="kMmH"></div></div>
+          <div class="card kpi reveal" style="animation-delay:.15s"><div class="l" data-t="temp"></div><div class="v num" id="kT">–</div><div class="h" id="kTH"></div></div>
+          <div class="card kpi reveal" style="animation-delay:.2s"><div class="l" data-t="vin"></div><div class="v num" id="kV">–</div><div class="h" id="kVH"></div></div>
+        </div>
+        <div class="card chart reveal" style="animation-delay:.25s">
+          <h2><span data-t="live"></span><span class="x" data-t="liveX"></span></h2>
+          <svg id="liveC" viewBox="0 0 800 170" preserveAspectRatio="none" style="height:170px"></svg>
+        </div>
+      </div>
+    </div>
+    <div class="card reveal" style="animation-delay:.3s">
+      <h2><span data-t="array"></span><span class="x" data-t="arrayX"></span></h2>
+      <div class="array" id="array"></div>
+      <div class="empty" id="noPanels" hidden data-t="noPanels"></div>
+    </div>
+  </section>
+
+  <!-- ANALYSIS -->
+  <section id="an" class="grid" hidden>
+    <div class="seg" id="spans" hidden>
+      <button data-span="24h" class="on">24 h</button><button data-span="7d" data-t="s7d"></button><button data-span="30d" data-t="s30d"></button><button data-span="12m" data-t="s12m"></button>
+      <span class="since" id="since"></span>
+    </div>
+    <div class="card chart">
+      <h2><span id="stackT" data-t="stack"></span><span class="x" id="stackXT" data-t="stackX"></span></h2>
+      <svg id="stackC" viewBox="0 0 900 240" preserveAspectRatio="none" style="height:240px"></svg>
+      <div class="legend" id="stackL"></div>
+    </div>
+    <div class="two">
+      <div class="card">
+        <h2><span id="rankT" data-t="rank"></span><span class="x" data-t="rankX"></span></h2>
+        <div class="rank" id="rank"></div>
+      </div>
+      <div class="card">
+        <h2 data-t="insights"></h2>
+        <div class="gauge" style="margin-bottom:14px"><svg id="health" viewBox="0 0 120 120"></svg><div><b style="font:600 15px var(--body)" data-t="health"></b><div style="color:var(--mute);font-size:12.5px;margin-top:4px" data-t="healthX"></div></div></div>
+        <div class="ins" id="ins"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2><span data-t="heat"></span><span class="x" id="heatXT" data-t="heatX"></span></h2>
+      <div class="heat" id="heat"></div>
+      <div class="axis" id="heatAx"></div>
+    </div>
+  </section>
+
+  <!-- PANELS -->
+  <section id="pn" class="grid" hidden>
+    <div class="card">
+      <h2><span data-t="tPn"></span><span class="x"><button class="btn" id="csv">CSV ⤓</button></span></h2>
+      <div class="tbl"><table id="tbl"></table></div>
+    </div>
+  </section>
+
+  <!-- SYSTEM -->
+  <section id="sy" class="grid" hidden>
+    <div class="two">
+      <div class="card">
+        <h2 data-t="unconf"></h2>
+        <p style="color:var(--mute);font-size:13px;margin-bottom:12px" data-t="unconfX"></p>
+        <div class="chips" id="unconf"></div>
+      </div>
+      <div class="card">
+        <h2 data-t="device"></h2>
+        <dl class="kv" id="dev"></dl>
+        <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn dng" id="reset" data-t="reset"></button>
+        </div>
+        <p style="color:var(--dim);font-size:12px;margin-top:10px" data-t="resetX"></p>
+      </div>
+    </div>
+  </section>
+
+  <footer><span data-t="foot"></span><span><a href="https://github.com/Bobsilvio/tigo_server" target="_blank" rel="noopener">github.com/Bobsilvio/tigo_server</a></span></footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const store={get(k,d){try{const v=localStorage.getItem("tigo."+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem("tigo."+k,JSON.stringify(v))}catch(e){}}};
+
+/* ---------- i18n ---------- */
+const T={
+en:{s7d:"7 days",s30d:"30 days",s12m:"12 months",since2:"history since {d}",stackD:"Daily energy",stackM:"Monthly energy",stack7:"Production, last 7 days",stackXh:"average power per hour, stacked by panel",stackXd:"energy per day, stacked by panel",stackXm:"energy per month, stacked by panel",heatXr:"each cell: panel yield relative to the best panel of that period",rankR:"Energy ranking",iLowR:"{n}: {d}% less energy than the median over the period",noData:"No history yet: the add-on stores data from now on.",esphome:"ESPHome UI",tOv:"Overview",tAn:"Analysis",tPn:"Panels",tSy:"System",now:"Array power now",peak:"Peak (session)",e24:"Energy 24 h",avgp:"Avg / panel",
+online:"Panels online",mismatch:"Mismatch",temp:"Temperature",vin:"Input voltage",live:"Live power",liveX:"last 30 min · this browser",array:"Array",arrayX:"glow = share of the best panel · tap a panel",
+noPanels:"No panel configured yet. Add panels: N (automatic slots) or long_address blocks in the YAML.",stack:"Production, last 24 h",stackX:"average power per 15 min, stacked by panel",
+rank:"Energy ranking, 24 h",rankX:"line = median",insights:"Insights",health:"Array health",healthX:"how evenly panels produce right now",heat:"Heatmap",heatX:"each row a panel, each cell 15 min",
+unconf:"Unconfigured panels",unconfX:"Optimizers reporting on the bus without a slot or YAML entry. Copy the address into a long_address block, or raise panels:.",
+device:"Device",reset:"Reset panel assignments",resetX:"Frees all automatic slots: panels take one again, in the order they report.",
+foot:"Receive-only listener on the Tigo TAP ↔ CCA bus · data decoded as the CCA firmware does",
+connecting:"connecting",live2:"live",offline:"device unreachable",demo:"demo data",
+spread:"spread between panels",of:"of",avg:"avg",max:"max",min:"min",range:"range",since:"since boot",
+off:"offline",low:"low",hot:"hot",copied:"Copied",resetQ:"Free all automatic panel slots?",resetOk:"Slots freed",
+iLow:"{n} produces {d}% less than the median",iLow24:"{n}: {d}% less energy than the median in 24 h",iHot:"{n} is at {t} °C",iRssi:"{n} has a weak signal (RSSI {r})",
+iOff:"{c} panel(s) offline: {l}",iUnc:"{c} optimizer(s) reporting without a slot",iOk:"All online panels within ±10% of the median",iNight:"Little sun: comparisons resume above 20 W per panel",
+iMm:"Mismatch {m}%: check shading or soiling",
+cName:"Panel",cP:"Power",cVin:"V in",cVout:"V out",cI:"Current",cT:"Temp",cR:"RSSI",cD:"Duty",cE:"Energy 24 h",cDev:"vs median",cAge:"Age",
+dAddr:"Long address",dNode:"Node",dHw:"Hardware ID",dScale:"Current scale",dE:"Energy since boot",dCurve:"Last 24 h vs median",uptime:"Uptime",slots:"Automatic slots",slotsU:"used",timeout:"Offline after",panelsN:"Panels",unknown:"unknown"},
+it:{s7d:"7 giorni",s30d:"30 giorni",s12m:"12 mesi",since2:"storico dal {d}",stackD:"Energia giornaliera",stackM:"Energia mensile",stack7:"Produzione, ultimi 7 giorni",stackXh:"potenza media oraria, impilata per pannello",stackXd:"energia al giorno, impilata per pannello",stackXm:"energia al mese, impilata per pannello",heatXr:"ogni cella: resa del pannello rispetto al migliore di quel periodo",rankR:"Classifica energia",iLowR:"{n}: {d}% di energia in meno della mediana nel periodo",noData:"Ancora nessuno storico: l'add-on registra i dati da adesso.",esphome:"UI ESPHome",tOv:"Panoramica",tAn:"Analisi",tPn:"Pannelli",tSy:"Sistema",now:"Potenza impianto ora",peak:"Picco (sessione)",e24:"Energia 24 h",avgp:"Media / pannello",
+online:"Pannelli online",mismatch:"Mismatch",temp:"Temperatura",vin:"Tensione ingresso",live:"Potenza live",liveX:"ultimi 30 min · questo browser",array:"Impianto",arrayX:"luce = quota del pannello migliore · tocca un pannello",
+noPanels:"Nessun pannello configurato. Aggiungi panels: N (posti automatici) o blocchi long_address nel YAML.",stack:"Produzione, ultime 24 h",stackX:"potenza media ogni 15 min, impilata per pannello",
+rank:"Classifica energia, 24 h",rankX:"linea = mediana",insights:"Analisi",health:"Salute impianto",healthX:"quanto producono in modo uniforme ora",heat:"Mappa di calore",heatX:"una riga per pannello, una cella ogni 15 min",
+unconf:"Pannelli non configurati",unconfX:"Ottimizzatori che trasmettono senza posto né voce nel YAML. Copia l'indirizzo in un blocco long_address o aumenta panels:.",
+device:"Dispositivo",reset:"Azzera assegnazioni pannelli",resetX:"Libera tutti i posti automatici: i pannelli li riprendono nell'ordine in cui trasmettono.",
+foot:"Ascolto in sola ricezione del bus Tigo TAP ↔ CCA · dati decodificati come fa il firmware del CCA",
+connecting:"connessione",live2:"live",offline:"dispositivo non raggiungibile",demo:"dati demo",
+spread:"scarto tra i pannelli",of:"di",avg:"media",max:"max",min:"min",range:"intervallo",since:"dall'avvio",
+off:"offline",low:"basso",hot:"caldo",copied:"Copiato",resetQ:"Liberare tutti i posti automatici dei pannelli?",resetOk:"Posti liberati",
+iLow:"{n} produce il {d}% in meno della mediana",iLow24:"{n}: {d}% di energia in meno della mediana in 24 h",iHot:"{n} è a {t} °C",iRssi:"{n} ha un segnale debole (RSSI {r})",
+iOff:"{c} pannelli offline: {l}",iUnc:"{c} ottimizzatori trasmettono senza posto",iOk:"Tutti i pannelli online entro ±10% della mediana",iNight:"Poco sole: i confronti riprendono sopra 20 W per pannello",
+iMm:"Mismatch {m}%: controlla ombre o sporco",
+cName:"Pannello",cP:"Potenza",cVin:"V in",cVout:"V out",cI:"Corrente",cT:"Temp",cR:"RSSI",cD:"Duty",cE:"Energia 24 h",cDev:"vs mediana",cAge:"Età",
+dAddr:"Long address",dNode:"Nodo",dHw:"Hardware ID",dScale:"Scala corrente",dE:"Energia dall'avvio",dCurve:"Ultime 24 h vs mediana",uptime:"Uptime",slots:"Posti automatici",slotsU:"usati",timeout:"Offline dopo",panelsN:"Pannelli",unknown:"sconosciuto"}};
+let lang=new URLSearchParams(location.search).get("lang")||store.get("lang",(navigator.language||"en").slice(0,2)==="it"?"it":"en");if(!T[lang])lang="en";
+const t=(k,v)=>{let s=(T[lang]||T.en)[k]??T.en[k]??k;if(v)for(const x in v)s=s.replace("{"+x+"}",v[x]);return s};
+function applyLang(){document.documentElement.lang=lang;$$("[data-t]").forEach(e=>e.textContent=t(e.dataset.t));$("#lang").textContent=lang==="it"?"EN":"IT";render()}
+
+/* ---------- theme ---------- */
+let theme=store.get("theme",matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");
+function applyTheme(){document.documentElement.dataset.theme=theme}
+applyTheme();
+$("#theme").onclick=()=>{theme=theme==="dark"?"light":"dark";store.set("theme",theme);applyTheme();render()};
+$("#lang").onclick=()=>{lang=lang==="it"?"en":"it";store.set("lang",lang);applyLang()};
+
+/* ---------- helpers ---------- */
+const fmt=(v,d=0)=>v==null||isNaN(v)?"–":Number(v).toFixed(d);
+const sgn=v=>{const r=Math.round(v);return (r>0?"+":"")+(r||0)+"%"};
+const fmtE=wh=>wh==null?"–":wh>=1e5?(wh/1000).toFixed(0)+" kWh":wh>=1e4?(wh/1000).toFixed(1)+" kWh":wh>=1000?(wh/1000).toFixed(2)+" kWh":wh.toFixed(0)+" Wh";
+const median=a=>{if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const PAL=["#ffb22e","#ff7a1a","#5ab8ff","#3ddc97","#c78bff","#ff5d8f","#ffe08a","#4fd1c5","#8fa8ff","#f6a35b","#9be15d","#ff9db0"];
+const pcol=i=>PAL[i%PAL.length];
+function heatColor(x){ // 0..1 -> deep blue -> amber -> pale gold
+  x=Math.max(0,Math.min(1,x));
+  const stops=[[18,30,60],[60,70,140],[255,122,26],[255,178,46],[255,236,170]];
+  const p=x*(stops.length-1),i=Math.min(stops.length-2,Math.floor(p)),f=p-i,a=stops[i],b=stops[i+1];
+  return `rgb(${a.map((v,k)=>Math.round(v+(b[k]-v)*f)).join(",")})`;
+}
+function toast(m){const e=$("#toast");e.textContent=m;e.classList.add("on");clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove("on"),1800)}
+function tween(el,to,d=0){const from=parseFloat(el.dataset.v||0);el.dataset.v=to;const t0=performance.now();
+  const step=n=>{const k=Math.min(1,(n-t0)/700),e=1-Math.pow(1-k,3);el.textContent=(from+(to-from)*e).toFixed(d);if(k<1)requestAnimationFrame(step)};requestAnimationFrame(step)}
+
+/* ---------- data ---------- */
+const DEMO=location.protocol==="file:"||new URLSearchParams(location.search).has("demo");
+let live=null,hist=null,mode="connecting",fails=0;
+let samples=store.get("samples",[]).filter(s=>Date.now()-s[0]<1800e3);
+let peak=store.get("peak",{d:"",w:0});
+
+async function getJSON(u){const r=await fetch(u,{cache:"no-store"});if(!r.ok)throw new Error(r.status);return r.json()}
+async function pollLive(){
+  try{live=DEMO?demoLive():await getJSON("tigo/live");mode=DEMO?"demo":"live";fails=0;
+    const tot=totalPower();samples.push([Date.now(),tot]);samples=samples.filter(s=>Date.now()-s[0]<1800e3);store.set("samples",samples);
+    const day=new Date().toDateString();if(peak.d!==day)peak={d:day,w:0};if(tot>peak.w){peak.w=tot;store.set("peak",peak)}
+  }catch(e){if(++fails>2)mode="offline"}
+  render();
+}
+async function pollHist(){try{hist=DEMO?demoHist():await getJSON("tigo/history");renderAnalysis()}catch(e){}}
+
+const panels=()=>live?live.panels:[];
+const onl=()=>panels().filter(p=>p.online&&p.p!=null);
+const totalPower=()=>onl().reduce((s,p)=>s+p.p,0);
+
+/* ---------- render: overview ---------- */
+let tab="ov";
+$$("#tabs button").forEach(b=>b.onclick=()=>{tab=b.dataset.tab;$$("#tabs button").forEach(x=>x.classList.toggle("on",x===b));$$("section").forEach(s=>s.hidden=s.id!==tab);render()});
+
+function render(){
+  if(!live&&mode!=="offline"){$("#status").textContent=t("connecting");return}
+  const dot=$("#dot");dot.className="dot"+(mode==="offline"?" off":mode==="demo"?" demo":"");
+  $("#status").textContent=mode==="offline"?t("offline"):mode==="demo"?t("demo"):t("live2")+" · "+fmt(onl().length)+"/"+panels().length;
+  if(!live)return;
+  renderOverview();
+  if(tab==="an")renderAnalysis();
+  if(tab==="pn")renderTable();
+  if(tab==="sy")renderSystem();
+}
+
+function renderOverview(){
+  const P=panels(),O=onl(),tot=totalPower();
+  tween($("#tot"),tot,0);
+  $("#peak").textContent=fmt(peak.w)+" W";
+  $("#e24").textContent=fmtE(P.reduce((s,p)=>s+(p.e24||0),0));
+  $("#avgp").textContent=O.length?fmt(tot/O.length)+" W":"–";
+  // arc gauge: share of session peak
+  const share=peak.w>0?Math.min(1,tot/peak.w):0;drawArc(share);
+  $("#kOn").innerHTML=`${O.length}<small>/ ${P.length}</small>`;
+  const off=P.filter(p=>!p.online).map(p=>p.name);$("#kOnH").textContent=off.length?t("off")+": "+off.slice(0,3).join(", ")+(off.length>3?"…":""):"✓";
+  const ps=O.map(p=>p.p),mean=ps.reduce((a,b)=>a+b,0)/(ps.length||1);
+  const cv=ps.length>1&&mean>5?Math.sqrt(ps.reduce((a,b)=>a+(b-mean)**2,0)/ps.length)/mean*100:null;
+  $("#kMm").innerHTML=cv==null?"–":`${fmt(cv,1)}<small>%</small>`;$("#kMmH").textContent=t("spread");
+  const ts=P.map(p=>p.t).filter(v=>v!=null);
+  $("#kT").innerHTML=ts.length?`${fmt(Math.max(...ts),1)}<small>°C ${t("max")}</small>`:"–";$("#kTH").textContent=ts.length?`${t("avg")} ${fmt(ts.reduce((a,b)=>a+b,0)/ts.length,1)} °C · ${t("min")} ${fmt(Math.min(...ts),1)}`:"";
+  const vs=O.map(p=>p.vin).filter(v=>v!=null);
+  $("#kV").innerHTML=vs.length?`${fmt(median(vs),1)}<small>V</small>`:"–";$("#kVH").textContent=vs.length?`${t("range")} ${fmt(Math.min(...vs),1)} – ${fmt(Math.max(...vs),1)} V`:"";
+  drawLive();drawArray();
+}
+
+function drawArc(x){
+  const sun=cssv("--sun"),sun2=cssv("--sun2"),line=cssv("--line2");
+  const R=120,cx=150,cy=118,a0=Math.PI,a1=Math.PI*(1-x);
+  const pt=a=>[cx+R*Math.cos(a),cy-R*Math.sin(a)];
+  const [ex,ey]=pt(a1);
+  let ticks="";for(let i=0;i<=20;i++){const a=Math.PI*(1-i/20),[x1,y1]=[cx+(R+9)*Math.cos(a),cy-(R+9)*Math.sin(a)],[x2,y2]=[cx+(R+(i%5?13:17))*Math.cos(a),cy-(R+(i%5?13:17))*Math.sin(a)];ticks+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${line}" stroke-width="1.5"/>`}
+  $("#arc").setAttribute("viewBox","0 -24 300 148");
+  $("#arc").innerHTML=`<defs><linearGradient id="ag" x1="0" x2="1"><stop offset="0" stop-color="${sun2}"/><stop offset="1" stop-color="${sun}"/></linearGradient><filter id="gl"><feGaussianBlur stdDeviation="4"/></filter></defs>${ticks}
+  <path d="M30 118 A120 120 0 0 1 270 118" fill="none" stroke="${line}" stroke-width="10" stroke-linecap="round"/>
+  ${x>0.001?`<path d="M30 118 A120 120 0 0 1 ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="url(#ag)" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="${ex}" cy="${ey}" r="11" fill="${sun}" filter="url(#gl)" opacity=".9"/><circle cx="${ex}" cy="${ey}" r="6" fill="#fff"/>`:""}
+  <text x="150" y="104" text-anchor="middle" style="font:600 13px var(--num);fill:${cssv("--mute")}">${fmt(x*100)}% ${t("of")} ${t("peak").toLowerCase().split(" ")[0]}</text>`;
+}
+
+function drawLive(){
+  const svg=$("#liveC"),W=800,H=170,pad=6,now=Date.now(),span=1800e3;
+  const pts=samples.filter(s=>now-s[0]<=span);
+  if(pts.length<2){svg.innerHTML=`<text x="400" y="90" text-anchor="middle">…</text>`;return}
+  const mx=Math.max(10,...pts.map(p=>p[1]))*1.12;
+  const X=ts=>(1-(now-ts)/span)*W,Y=v=>H-pad-(v/mx)*(H-pad*2-14);
+  let d="";pts.forEach((p,i)=>d+=(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1));
+  const last=pts[pts.length-1],sun=cssv("--sun");
+  let grid="";for(let i=1;i<4;i++){const y=(H-pad)*i/4;grid+=`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${cssv("--line")}" stroke-dasharray="3 5"/>`}
+  svg.innerHTML=`<defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sun}" stop-opacity=".45"/><stop offset="1" stop-color="${sun}" stop-opacity="0"/></linearGradient></defs>${grid}
+  <path d="${d}L${X(last[0])} ${H}L${X(pts[0][0])} ${H}Z" fill="url(#lg)"/>
+  <path d="${d}" fill="none" stroke="${sun}" stroke-width="2.2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+  <circle cx="${X(last[0])}" cy="${Y(last[1])}" r="4" fill="${sun}"><animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite"/></circle>
+  <text x="${W-6}" y="14" text-anchor="end">${fmt(mx/1.12)} W</text>`;
+}
+
+function drawArray(){
+  const P=panels(),box=$("#array");$("#noPanels").hidden=P.length>0;
+  const best=Math.max(1,...onl().map(p=>p.p)),med=median(onl().map(p=>p.p));
+  if(box.children.length!==P.length){box.innerHTML=P.map((_,i)=>`<button class="cell" data-i="${i}"><span class="shine" style="animation-delay:${(i%7)*.6}s"></span><span class="nm"></span><span class="w num"></span><span class="meta"></span><span class="bar"><i></i></span></button>`).join("");
+    $$(".cell").forEach(c=>c.onclick=()=>openPanel(+c.dataset.i))}
+  P.forEach((p,i)=>{const c=box.children[i],a=p.online&&p.p!=null?p.p/best:0;
+    c.style.setProperty("--a",a.toFixed(3));c.classList.toggle("off",!p.online);
+    c.querySelector(".nm").textContent=p.name;
+    c.querySelector(".w").innerHTML=p.online&&p.p!=null?`${fmt(p.p)}<small>W</small>`:t("off");
+    c.querySelector(".meta").innerHTML=p.online?`<span>${fmt(p.vin,1)} V</span><span>${p.t!=null?fmt(p.t,0)+"°":""}</span>`:`<span>${p.addr?p.addr.slice(-6):""}</span>`;
+    c.querySelector(".bar i").style.width=(a*100).toFixed(1)+"%";
+    let tag=c.querySelector(".tag");const low=p.online&&med>20&&p.p<med*.8,hot=p.t!=null&&p.t>=70;
+    if(low||hot){if(!tag){tag=document.createElement("span");tag.className="tag";c.appendChild(tag)}tag.textContent=low?t("low"):t("hot")}else if(tag)tag.remove();
+  });
+}
+
+/* ---------- analysis ---------- */
+function setT(id,k){const e=$("#"+id);e.dataset.t=k;e.textContent=t(k)}
+function renderAnalysis(){
+  if(tab!=="an"||!live)return;
+  if(span==="24h"){
+    setT("stackT","stack");setT("stackXT","stackX");setT("rankT","rank");setT("heatXT","heatX");
+    drawStack();drawRankItems(panels().map((p,i)=>({name:p.name,e:p.e24||0,i})));drawInsights();drawHeat();
+    return;
+  }
+  const u=range&&range.unit;
+  setT("stackT",span==="7d"?"stack7":u==="month"?"stackM":"stackD");setT("stackXT",u==="hour"?"stackXh":u==="month"?"stackXm":"stackXd");
+  setT("rankT","rankR");setT("heatXT",u==="hour"?"heatX":"heatXr");
+  drawRangeStack();drawRankItems(rangeTotals());drawInsights();drawRangeHeat();
+}
+
+/* ---------- long history (Home Assistant add-on only) ---------- */
+let addon=null,span="24h",range=null;
+async function detectAddon(){
+  if(DEMO){if(new URLSearchParams(location.search).has("addon"))addon={addon:true,since:Date.now()/1e3-86400*200}}
+  else{try{const i=await getJSON("tigo/info");if(i&&i.addon)addon=i}catch(e){}}
+  if(!addon)return;
+  $("#spans").hidden=false;$("#espui").hidden=true;$("#sub").textContent="Home Assistant";
+  $("#since").textContent=addon.since?t("since2",{d:new Date(addon.since*1e3).toLocaleDateString(lang)}):"";
+  const q=new URLSearchParams(location.search).get("span");if(q&&q!=="24h"){const b=document.querySelector(`[data-span="${q}"]`);if(b)b.click()}
+}
+$$("#spans button").forEach(b=>b.onclick=()=>{span=b.dataset.span;$$("#spans button").forEach(x=>x.classList.toggle("on",x===b));loadRange()});
+async function loadRange(){
+  if(span!=="24h"){try{range=DEMO?demoRange(span):await getJSON("tigo/range?span="+span)}catch(e){range=null}}
+  renderAnalysis();
+}
+const ridx=key=>panels().findIndex(p=>(p.addr||p.name)===key);
+function rangeTotals(){if(!range)return [];return range.panels.map((p,k)=>({name:p.name,e:range.data[k].reduce((a,b)=>a+b,0),i:ridx(p.key)}))}
+function rangeLabel(ts){const d=new Date(ts*1e3),u=range.unit;
+  return u==="hour"?d.toLocaleDateString(lang,{weekday:"short"})+" "+String(d.getHours()).padStart(2,"0")+":00":u==="day"?d.toLocaleDateString(lang,{day:"2-digit",month:"2-digit"}):d.toLocaleDateString(lang,{month:"short",year:"2-digit"})}
+function drawRangeStack(){
+  const svg=$("#stackC"),W=900,H=240;
+  if(!range||!range.panels.length){svg.innerHTML=`<text x="450" y="120" text-anchor="middle">${esc(range?t("noData"):"…")}</text>`;$("#stackL").innerHTML="";return}
+  const n=range.start.length,hour=range.unit==="hour",conv=v=>hour?v:v/1000,unit=hour?"W":"kWh";
+  const series=range.data.map(a=>a.map(conv)),tot=[];for(let k=0;k<n;k++)tot.push(series.reduce((s,a)=>s+a[k],0));
+  const mx=Math.max(hour?10:.1,...tot)*1.1,Y=v=>H-18-(v/mx)*(H-30);
+  let marks="";
+  if(n>60){const X=k=>k/(n-1)*W;let acc=new Array(n).fill(0);
+    series.forEach((a,i)=>{const lo=acc.slice(),hi=acc.map((v,k)=>v+a[k]);acc=hi;
+      let d="M0 "+Y(hi[0]);for(let k=1;k<n;k++)d+="L"+X(k).toFixed(1)+" "+Y(hi[k]).toFixed(1);for(let k=n-1;k>=0;k--)d+="L"+X(k).toFixed(1)+" "+Y(lo[k]).toFixed(1);
+      marks+=`<path d="${d}Z" fill="${pcol(i)}" fill-opacity=".78" stroke="${pcol(i)}" stroke-width=".6"><title>${esc(range.panels[i].name)}</title></path>`});
+  }else{const bw=W/n,gap=Math.min(6,bw*.25);
+    for(let k=0;k<n;k++){let y0=H-18;series.forEach((a,i)=>{const h=(H-18)-Y(a[k]);if(h<=0)return;y0-=h;
+      marks+=`<rect x="${(k*bw+gap/2).toFixed(1)}" y="${y0.toFixed(1)}" width="${(bw-gap).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${pcol(i)}" fill-opacity=".85"><title>${esc(range.panels[i].name)} · ${rangeLabel(range.start[k])} · ${fmt(a[k],2)} ${unit}</title></rect>`})}
+  }
+  const step=Math.max(1,Math.ceil(n/7));let ax="";
+  for(let k=0;k<n;k+=step){const x=n>60?k/(n-1)*W:(k+.5)*W/n;ax+=`<text x="${x.toFixed(1)}" y="${H-2}" text-anchor="${n>60&&!k?"start":"middle"}">${rangeLabel(range.start[k])}</text>`}
+  let grid="";for(let i=1;i<4;i++){const y=(H-18)*i/4;grid+=`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${cssv("--line")}" stroke-dasharray="3 5"/>`}
+  svg.innerHTML=grid+marks+ax+`<text x="${W}" y="12" text-anchor="end">${fmt(mx/1.1,hour?0:1)} ${unit}</text>`;
+  $("#stackL").innerHTML=range.panels.map((p,i)=>`<span><i style="background:${pcol(i)}"></i>${esc(p.name)}</span>`).join("");
+}
+function drawRangeHeat(){
+  if(!range||!range.panels.length){$("#heat").innerHTML="";$("#heatAx").innerHTML="";return}
+  const n=range.start.length,hour=range.unit==="hour";
+  const colMax=[];for(let k=0;k<n;k++)colMax.push(Math.max(...range.data.map(a=>a[k])));
+  const all=Math.max(.1,...colMax);
+  $("#heat").innerHTML=range.data.map((a,i)=>`<div class="row"><span class="lab">${esc(range.panels[i].name)}</span><span class="cells" style="grid-template-columns:repeat(${n},1fr)">${a.map((v,k)=>{
+    const x=hour?Math.sqrt(v/all):colMax[k]>0?v/colMax[k]:0,bg=colMax[k]>0?(hour?heatColor(x):heatColor(.15+.85*x*x*x)):"transparent";
+    return `<i style="background:${bg}" title="${rangeLabel(range.start[k])} · ${hour?fmt(v)+" Wh":fmt(v/1000,2)+" kWh"+(colMax[k]>0?" · "+fmt(x*100)+"%":"")}"></i>`}).join("")}</span></div>`).join("");
+  $("#heatAx").innerHTML=[0,Math.floor(n/4),Math.floor(n/2),Math.floor(3*n/4),n-1].map(k=>`<span>${rangeLabel(range.start[k])}</span>`).join("");
+}
+function bucketLabels(n){const now=new Date(),b=(hist&&hist.bucket||900)*1e3,out=[];for(let k=0;k<n;k++){const d=new Date(now-(n-1-k)*b);out.push(d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0"))}return out}
+function drawStack(){
+  const svg=$("#stackC"),W=900,H=240,P=panels();
+  if(!hist||!hist.panels.length){svg.innerHTML=`<text x="450" y="120" text-anchor="middle">…</text>`;return}
+  const n=96,hB=hist.bucket/3600,valid=hist.valid||n;
+  // Wh per bucket -> average W; newest bucket scaled by elapsed time
+  const into=Math.max(60e3,hist.into||0)/1e3/3600;
+  const series=hist.panels.map(a=>a.map((wh,k)=>k===n-1?wh/into:wh/hB));
+  const tot=[];for(let k=0;k<n;k++)tot.push(series.reduce((s,a)=>s+a[k],0));
+  const mx=Math.max(10,...tot)*1.1,X=k=>k/(n-1)*W,Y=v=>H-18-(v/mx)*(H-30);
+  let acc=new Array(n).fill(0),paths="";
+  series.forEach((a,i)=>{const lo=acc.slice(),hi=acc.map((v,k)=>v+a[k]);acc=hi;
+    let d="M"+X(0)+" "+Y(hi[0]);for(let k=1;k<n;k++)d+="L"+X(k).toFixed(1)+" "+Y(hi[k]).toFixed(1);for(let k=n-1;k>=0;k--)d+="L"+X(k).toFixed(1)+" "+Y(lo[k]).toFixed(1);
+    paths+=`<path d="${d}Z" fill="${pcol(i)}" fill-opacity=".78" stroke="${pcol(i)}" stroke-width=".6"><title>${esc(P[i]?P[i].name:"")}</title></path>`});
+  const lab=bucketLabels(n);let ax="";for(let k=0;k<n;k+=16)ax+=`<text x="${X(k)}" y="${H-2}" text-anchor="${k?"middle":"start"}">${lab[k]}</text>`;
+  const cut=valid<n?`<rect x="0" y="0" width="${X(n-valid)}" height="${H-18}" fill="${cssv("--ink")}" opacity=".55"/>`:"";
+  let grid="";for(let i=1;i<4;i++){const y=(H-18)*i/4;grid+=`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${cssv("--line")}" stroke-dasharray="3 5"/>`}
+  svg.innerHTML=grid+paths+cut+ax+`<text x="${W}" y="12" text-anchor="end">${fmt(mx/1.1)} W</text>`;
+  $("#stackL").innerHTML=P.map((p,i)=>`<span><i style="background:${pcol(i)}"></i>${esc(p.name)}</span>`).join("");
+}
+function drawRankItems(items){
+  const P=items.slice().sort((a,b)=>b.e-a.e);
+  const mx=Math.max(1,...P.map(p=>p.e)),med=median(P.filter(p=>p.e>0).map(p=>p.e));
+  $("#rank").innerHTML=P.length?P.map((p,k)=>{const dev=med>0?(p.e-med)/med*100:0,c=dev>3?"pos-c":dev<-10?"neg-c":"mid-c";
+    return `<div class="rk" data-i="${p.i}"><span class="pos">${k+1}</span><span class="nm">${esc(p.name)}</span><span class="tr"><i style="width:${(p.e/mx*100).toFixed(1)}%"></i>${med>0?`<b style="left:${(med/mx*100).toFixed(1)}%"></b>`:""}</span><span class="val">${fmtE(p.e)}</span><span class="dev ${c}">${med>0?sgn(dev):""}</span></div>`}).join(""):`<div class="empty">–</div>`;
+  $$(".rk").forEach(r=>r.onclick=()=>{const i=+r.dataset.i;if(i>=0)openPanel(i)});
+}
+function insights(){
+  const P=panels(),O=onl(),out=[],med=median(O.map(p=>p.p));
+  const off=P.filter(p=>!p.online);if(off.length)out.push(["bad","⏻",t("iOff",{c:off.length,l:off.map(p=>p.name).join(", ")})]);
+  if(med>20){O.filter(p=>p.p<med*.85).sort((a,b)=>a.p-b.p).forEach(p=>out.push([p.p<med*.7?"bad":"warn","↓",t("iLow",{n:p.name,d:fmt((1-p.p/med)*100)})]));}
+  else out.push(["info","☾",t("iNight")]);
+  if(span!=="24h"&&range){const tt=rangeTotals(),mr=median(tt.filter(x=>x.e>0).map(x=>x.e));
+    if(mr>100)tt.filter(x=>x.e>0&&x.e<mr*.9).sort((a,b)=>a.e-b.e).forEach(x=>out.push([x.e<mr*.8?"bad":"warn","Σ",t("iLowR",{n:x.name,d:fmt((1-x.e/mr)*100)})]))}
+  const m24=median(P.filter(p=>p.e24>0).map(p=>p.e24));
+  if(span==="24h"&&m24>50)P.filter(p=>p.e24>0&&p.e24<m24*.85).forEach(p=>out.push(["warn","Σ",t("iLow24",{n:p.name,d:fmt((1-p.e24/m24)*100)})]));
+  P.filter(p=>p.t!=null&&p.t>=70).forEach(p=>out.push(["warn","♨",t("iHot",{n:p.name,t:fmt(p.t,1)})]));
+  const rs=P.filter(p=>p.rssi!=null),mr=median(rs.map(p=>p.rssi));
+  rs.filter(p=>p.rssi<mr*.6).forEach(p=>out.push(["info","⌁",t("iRssi",{n:p.name,r:fmt(p.rssi)})]));
+  if(live.unconfigured.length)out.push(["info","+",t("iUnc",{c:live.unconfigured.length})]);
+  if(med>20&&!O.some(p=>Math.abs(p.p-med)>med*.1))out.push(["good","✓",t("iOk")]);
+  return out;
+}
+function drawInsights(){
+  const O=onl(),ps=O.map(p=>p.p),mean=ps.reduce((a,b)=>a+b,0)/(ps.length||1);
+  const cv=ps.length>1&&mean>5?Math.sqrt(ps.reduce((a,b)=>a+(b-mean)**2,0)/ps.length)/mean:0;
+  const score=Math.round(Math.max(0,Math.min(100,100-cv*250))*(panels().length?O.length/panels().length:0));
+  const col=score>=85?cssv("--good"):score>=60?cssv("--warn"):cssv("--bad"),C=2*Math.PI*48;
+  $("#health").innerHTML=`<circle cx="60" cy="60" r="48" fill="none" stroke="${cssv("--line2")}" stroke-width="10"/>
+  <circle cx="60" cy="60" r="48" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C*score/100} ${C}" transform="rotate(-90 60 60)" style="transition:stroke-dasharray .8s"/>
+  <text x="60" y="68" text-anchor="middle" style="font:600 26px var(--num);fill:${cssv("--text")}">${score}</text>`;
+  const ins=insights();
+  $("#ins").innerHTML=ins.map(([k,i,s])=>`<div class="in ${k}"><span class="ic">${i}</span><div><b>${esc(s)}</b></div></div>`).join("");
+}
+function drawHeat(){
+  const P=panels();if(!hist){$("#heat").innerHTML="";return}
+  const mx=Math.max(.1,...hist.panels.flat()),valid=hist.valid||96;
+  $("#heat").innerHTML=hist.panels.map((a,i)=>`<div class="row"><span class="lab">${esc(P[i]?P[i].name:"")}</span><span class="cells">${a.map((v,k)=>`<i style="background:${k<96-valid?"transparent":heatColor(Math.sqrt(v/mx))}" title="${fmt(v,1)} Wh"></i>`).join("")}</span></div>`).join("");
+  const lab=bucketLabels(96);$("#heatAx").innerHTML=[0,24,48,72,95].map(k=>`<span>${lab[k]}</span>`).join("");
+}
+
+/* ---------- table ---------- */
+let sortK=store.get("sortK","p"),sortAsc=false;
+const COLS=[["name","cName"],["p","cP",0,"W"],["dev","cDev"],["vin","cVin",2],["vout","cVout",1],["i","cI",3],["t","cT",1],["rssi","cR",0],["duty","cD",0,"%"],["e24","cE"],["age","cAge"]];
+function rows(){const med=median(onl().map(p=>p.p));return panels().map((p,i)=>({...p,i,dev:p.online&&med>20&&p.p!=null?(p.p-med)/med*100:null}))}
+function renderTable(){
+  const R=rows().sort((a,b)=>{const x=a[sortK],y=b[sortK];if(typeof x==="string")return sortAsc?x.localeCompare(y):y.localeCompare(x);return ((x??-1e9)-(y??-1e9))*(sortAsc?1:-1)});
+  $("#tbl").innerHTML=`<thead><tr>${COLS.map(([k,l])=>`<th data-k="${k}" class="${k===sortK?"s"+(sortAsc?" asc":""):""}">${t(l)}</th>`).join("")}</tr></thead><tbody>${R.map(p=>`<tr data-i="${p.i}">${COLS.map(([k,,d,u])=>{
+    if(k==="name")return `<td><span class="st${p.online?"":" off"}"></span>${esc(p.name)}</td>`;
+    if(k==="dev")return `<td class="${p.dev==null?"":p.dev>3?"pos-c":p.dev<-10?"neg-c":"mid-c"}">${p.dev==null?"–":sgn(p.dev)}</td>`;
+    if(k==="e24")return `<td>${fmtE(p.e24)}</td>`;
+    if(k==="age")return `<td>${p.age<0?"–":p.age+" s"}</td>`;
+    return `<td>${fmt(p[k],d)}${u&&p[k]!=null?" "+u:""}</td>`}).join("")}</tr>`).join("")}</tbody>`;
+  $$("#tbl th").forEach(h=>h.onclick=()=>{const k=h.dataset.k;if(k===sortK)sortAsc=!sortAsc;else{sortK=k;sortAsc=k==="name"};store.set("sortK",sortK);renderTable()});
+  $$("#tbl tbody tr").forEach(r=>r.onclick=()=>openPanel(+r.dataset.i));
+}
+$("#csv").onclick=()=>{const head=["name","long_address","node","online","power_w","vin_v","vout_v","current_a","temp_c","rssi","duty_pct","energy_24h_wh","energy_boot_wh"];
+  const lines=[head.join(",")].concat(panels().map(p=>[p.name,p.addr,p.node,p.online,p.p,p.vin,p.vout,p.i,p.t,p.rssi,p.duty,p.e24,p.e].map(v=>v==null?"":String(v).includes(",")?`"${v}"`:v).join(",")));
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv"}));a.download="tigo-panels-"+new Date().toISOString().slice(0,16).replace(/[:T]/g,"-")+".csv";a.click()};
+
+/* ---------- system ---------- */
+function renderSystem(){
+  const U=live.unconfigured;
+  $("#unconf").innerHTML=U.length?U.map(u=>`<span class="chip">${esc(u)}<button data-c="${esc(u)}">copy</button></span>`).join(""):`<div class="empty">✓</div>`;
+  $$("#unconf button").forEach(b=>b.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(b.dataset.c);toast(t("copied"))});
+  const used=panels().filter(p=>p.slot&&p.addr).length,up=live.uptime;
+  $("#dev").innerHTML=[[t("uptime"),`${Math.floor(up/86400)}d ${Math.floor(up%86400/3600)}h ${Math.floor(up%3600/60)}m`],[t("panelsN"),panels().length],[t("slots"),live.slots?`${used} ${t("slotsU")} / ${live.slots}`:"–"],[t("timeout"),live.timeout+" s"]].map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
+  $("#reset").hidden=!live.slots;
+}
+$("#reset").onclick=async()=>{if(!confirm(t("resetQ")))return;try{if(!DEMO)await fetch("tigo/reset",{method:"POST"});toast(t("resetOk"));pollLive()}catch(e){toast("✕")}};
+
+/* ---------- drawer ---------- */
+const scale=h=>h<0?null:h<=0x23?0.0025:h<=0x5f?0.005:0.025;
+function openPanel(i){
+  const p=panels()[i];if(!p)return;
+  const a=hist&&hist.panels[i],med=hist?Array.from({length:96},(_,k)=>median(hist.panels.map(x=>x[k]))):null;
+  let curve="";
+  if(a){const mx=Math.max(.1,...a,...med),W=390,H=110,X=k=>k/95*W,Y=v=>H-4-v/mx*(H-10);
+    const path=s=>s.map((v,k)=>(k?"L":"M")+X(k).toFixed(1)+" "+Y(v).toFixed(1)).join("");
+    curve=`<h2 style="margin-top:6px">${t("dCurve")}</h2><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto"><path d="${path(med)}" fill="none" stroke="${cssv("--mute")}" stroke-dasharray="4 4" stroke-width="1.5"/><path d="${path(a)}L${W} ${H}L0 ${H}Z" fill="${cssv("--sun")}" fill-opacity=".18"/><path d="${path(a)}" fill="none" stroke="${cssv("--sun")}" stroke-width="2"/></svg>`}
+  const sc=scale(p.hw);
+  $("#drawer").innerHTML=`<button class="ibtn close" id="dx">✕</button>
+  <h3>${esc(p.name)}</h3><div class="addr">${p.addr||t("unknown")}</div>
+  <div class="big num" style="font-size:56px">${p.online&&p.p!=null?fmt(p.p):"–"}<span class="u">W</span></div>
+  <div class="mini">
+   <div><small>${t("cVin")}</small><b>${fmt(p.vin,2)} V</b></div><div><small>${t("cVout")}</small><b>${fmt(p.vout,1)} V</b></div>
+   <div><small>${t("cI")}</small><b>${fmt(p.i,3)} A</b></div><div><small>${t("cT")}</small><b>${p.t!=null?fmt(p.t,1)+" °C":"–"}</b></div>
+   <div><small>${t("cR")}</small><b>${fmt(p.rssi)}</b></div><div><small>${t("cD")}</small><b>${fmt(p.duty)} %</b></div>
+   <div><small>${t("cE")}</small><b>${fmtE(p.e24)}</b></div><div><small>${t("dE")}</small><b>${fmtE(p.e)}</b></div>
+  </div>${curve}
+  <dl class="kv" style="margin-top:16px"><dt>${t("dNode")}</dt><dd>${p.node>=0?p.node.toString(16).toUpperCase().padStart(4,"0"):"–"}</dd>
+  <dt>${t("dHw")}</dt><dd>${p.hw>=0?"0x"+p.hw.toString(16).toUpperCase():t("unknown")}</dd>
+  <dt>${t("dScale")}</dt><dd>${sc?sc+" A":"0.005 A ("+t("unknown")+")"}</dd><dt>${t("cAge")}</dt><dd>${p.age<0?"–":p.age+" s"}</dd></dl>`;
+  $("#drawer").classList.add("on");$("#scrim").classList.add("on");$("#dx").onclick=closePanel;
+}
+function closePanel(){$("#drawer").classList.remove("on");$("#scrim").classList.remove("on")}
+$("#scrim").onclick=closePanel;addEventListener("keydown",e=>e.key==="Escape"&&closePanel());
+
+/* ---------- demo data (file:// or ?demo) ---------- */
+function demoLive(){
+  const names=["A1","A2","A3","A4","A5","A6","B1","B2","B3","B4","B5","B6"],s=Date.now()/1000;
+  const sun=Math.max(.05,Math.sin(((new Date().getHours()+new Date().getMinutes()/60)-6)/12*Math.PI)),base=330*Math.max(sun,.55);
+  return {uptime:Math.floor(s%400000),timeout:300,slots:12,unconfigured:["04C05B4000B1A7F2"],panels:names.map((n,i)=>{
+    const shade=n==="B4"?.58:n==="A6"?.88:1,p=base*shade*(1+.025*Math.sin(s/7+i)),vin=33.6+Math.sin(i)*.7,cur=p/vin,off=n==="B6"&&false;
+    return {name:n,addr:"04C05B4000B1A6"+(0x80+i).toString(16).toUpperCase(),node:0x10+i,hw:0x2D,slot:1,online:!off,age:Math.floor(s%9),p,vin,vout:vin*.98,i:cur,t:38+p/40+i%3,rssi:n==="A1"?62:120+i*3%40,duty:94-i%4,e:1800*shade,e24:2150*shade*(1+.01*i)}})};
+}
+function demoHist(){
+  const L=demoLive(),now=new Date(),panels=L.panels.map((p,i)=>{const a=[];for(let k=0;k<96;k++){const h=(now-(95-k)*9e5)/36e5%24,sun=Math.max(0,Math.sin((h-6.2)/12.6*Math.PI));
+    const cloud=1-.35*Math.max(0,Math.sin(k/5.3))*(k>50&&k<70?1:0);a.push(+(sun*cloud*82*(p.name==="B4"&&h>13?.45:p.name==="A6"?.9:1)).toFixed(1))}return a});
+  return {bucket:900,valid:96,into:450e3,panels};
+}
+
+function demoRange(sp){
+  const names=["A1","A2","A3","A4","A5","A6","B1","B2","B3","B4","B5","B6"],unit=sp==="7d"?"hour":sp==="30d"?"day":"month",n=sp==="7d"?168:sp==="30d"?30:12;
+  const now=new Date(),start=[];
+  for(let k=n-1;k>=0;k--){let d=new Date(now);if(unit==="hour"){d.setMinutes(0,0,0);d=new Date(d-k*36e5)}else if(unit==="day"){d.setHours(0,0,0,0);d.setDate(d.getDate()-k)}else{d=new Date(now.getFullYear(),now.getMonth()-k,1)}start.push(Math.floor(d/1e3))}
+  const data=names.map((nm,i)=>start.map((ts,k)=>{const d=new Date(ts*1e3);let v;
+    if(unit==="hour"){const h=d.getHours(),sun=Math.max(0,Math.sin((h-6.2)/12.6*Math.PI)),cloud=[1,.55,.9,1,.35,.95,1][d.getDay()];v=sun*cloud*330*(nm==="B4"&&h>=13?.45:1)}
+    else{const m=d.getMonth(),season=.45+.55*Math.sin((m+.5-2)/12*Math.PI*1.1),days=unit==="month"?30:1,w=unit==="day"?(.5+.5*Math.abs(Math.sin(k*1.7))):1;
+      v=2300*season*days*w*(nm==="B4"?(m>=3&&m<=8?.85:.6):1)*(nm==="A6"&&k>n-8?.8:1)}
+    return +(v*(1+.015*(i%3))).toFixed(1)}));
+  return {unit,start,panels:names.map((nm,i)=>({key:"04C05B4000B1A6"+(0x80+i).toString(16).toUpperCase(),name:nm})),data};
+}
+
+/* ---------- start ---------- */
+if(DEMO&&samples.length<10){const L=demoLive(),tot=L.panels.reduce((s,p)=>s+p.p,0);samples=[];for(let k=720;k>0;k--)samples.push([Date.now()-k*2500,tot*(1-.12*Math.max(0,Math.sin(k/90))+.02*Math.sin(k/7))])}
+applyLang();
+{const h=new URLSearchParams(location.search).get("tab"),b=h&&document.querySelector(`[data-tab="${h}"]`);if(b)b.click()}
+pollLive();pollHist();detectAddon();
+setInterval(pollLive,2500);setInterval(pollHist,60e3);
+setInterval(()=>{if(tab==="ov"&&live)drawLive()},5e3);
+</script>
+</body>
+</html>

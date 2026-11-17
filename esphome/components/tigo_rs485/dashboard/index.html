@@ -109,6 +109,10 @@ nav button.on{color:#1a1206;background:linear-gradient(140deg,var(--sun3),var(--
 /* charts */
 .chart svg{width:100%;display:block;overflow:visible}
 .chart text{font:11px var(--num);fill:var(--dim)}
+.seg{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.seg button{padding:7px 14px;border-radius:9px;font:600 13px var(--num);color:var(--mute);border:1px solid var(--line);background:var(--card);backdrop-filter:blur(12px);transition:.2s}
+.seg button.on{color:var(--text);border-color:var(--sun);box-shadow:inset 0 0 0 1px var(--sun)}
+.seg .since{margin-left:auto;font-size:12px;color:var(--dim)}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:12px;color:var(--mute)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .two{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
@@ -121,13 +125,13 @@ nav button.on{color:#1a1206;background:linear-gradient(140deg,var(--sun3),var(--
 
 /* analysis */
 .rank{display:grid;gap:8px}
-.rk{display:grid;grid-template-columns:22px 70px 1fr 72px 62px;gap:10px;align-items:center;font-size:13px;cursor:pointer}
+.rk{display:grid;grid-template-columns:22px 70px 1fr 84px 56px;gap:10px;align-items:center;font-size:13px;cursor:pointer}
 .rk .pos{font:600 12px var(--num);color:var(--dim)}
 .rk .nm{font:700 13px var(--disp);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rk .tr{height:10px;border-radius:5px;background:var(--line);overflow:hidden;position:relative}
 .rk .tr i{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,var(--sun2),var(--sun3));transition:width .8s}
 .rk .tr b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--text);opacity:.5}
-.rk .val{font:600 12.5px var(--num);text-align:right}
+.rk .val{font:600 12.5px var(--num);text-align:right;white-space:nowrap}
 .rk .dev{font:600 12px var(--num);text-align:right}
 .pos-c{color:var(--good)}.neg-c{color:var(--bad)}.mid-c{color:var(--mute)}
 .ins{display:grid;gap:10px}
@@ -195,7 +199,7 @@ footer a{color:var(--mute)}
     <span class="pill"><i class="dot" id="dot"></i><span id="status">…</span></span>
     <button class="ibtn" id="lang">IT</button>
     <button class="ibtn" id="theme" aria-label="theme">◐</button>
-    <a class="ibtn" href="/?esphome" style="display:inline-grid;place-items:center;text-decoration:none" data-t="esphome"></a>
+    <a class="ibtn" id="espui" href="/?esphome" style="display:inline-grid;place-items:center;text-decoration:none" data-t="esphome"></a>
   </header>
 
   <nav id="tabs">
@@ -240,14 +244,18 @@ footer a{color:var(--mute)}
 
   <!-- ANALYSIS -->
   <section id="an" class="grid" hidden>
+    <div class="seg" id="spans" hidden>
+      <button data-span="24h" class="on">24 h</button><button data-span="7d" data-t="s7d"></button><button data-span="30d" data-t="s30d"></button><button data-span="12m" data-t="s12m"></button>
+      <span class="since" id="since"></span>
+    </div>
     <div class="card chart">
-      <h2><span data-t="stack"></span><span class="x" data-t="stackX"></span></h2>
+      <h2><span id="stackT" data-t="stack"></span><span class="x" id="stackXT" data-t="stackX"></span></h2>
       <svg id="stackC" viewBox="0 0 900 240" preserveAspectRatio="none" style="height:240px"></svg>
       <div class="legend" id="stackL"></div>
     </div>
     <div class="two">
       <div class="card">
-        <h2><span data-t="rank"></span><span class="x" data-t="rankX"></span></h2>
+        <h2><span id="rankT" data-t="rank"></span><span class="x" data-t="rankX"></span></h2>
         <div class="rank" id="rank"></div>
       </div>
       <div class="card">
@@ -257,7 +265,7 @@ footer a{color:var(--mute)}
       </div>
     </div>
     <div class="card">
-      <h2><span data-t="heat"></span><span class="x" data-t="heatX"></span></h2>
+      <h2><span data-t="heat"></span><span class="x" id="heatXT" data-t="heatX"></span></h2>
       <div class="heat" id="heat"></div>
       <div class="axis" id="heatAx"></div>
     </div>
@@ -304,7 +312,7 @@ const store={get(k,d){try{const v=localStorage.getItem("tigo."+k);return v==null
 
 /* ---------- i18n ---------- */
 const T={
-en:{esphome:"ESPHome UI",tOv:"Overview",tAn:"Analysis",tPn:"Panels",tSy:"System",now:"Array power now",peak:"Peak (session)",e24:"Energy 24 h",avgp:"Avg / panel",
+en:{s7d:"7 days",s30d:"30 days",s12m:"12 months",since2:"history since {d}",stackD:"Daily energy",stackM:"Monthly energy",stack7:"Production, last 7 days",stackXh:"average power per hour, stacked by panel",stackXd:"energy per day, stacked by panel",stackXm:"energy per month, stacked by panel",heatXr:"each cell: panel yield relative to the best panel of that period",rankR:"Energy ranking",iLowR:"{n}: {d}% less energy than the median over the period",noData:"No history yet: the add-on stores data from now on.",esphome:"ESPHome UI",tOv:"Overview",tAn:"Analysis",tPn:"Panels",tSy:"System",now:"Array power now",peak:"Peak (session)",e24:"Energy 24 h",avgp:"Avg / panel",
 online:"Panels online",mismatch:"Mismatch",temp:"Temperature",vin:"Input voltage",live:"Live power",liveX:"last 30 min · this browser",array:"Array",arrayX:"glow = share of the best panel · tap a panel",
 noPanels:"No panel configured yet. Add panels: N (automatic slots) or long_address blocks in the YAML.",stack:"Production, last 24 h",stackX:"average power per 15 min, stacked by panel",
 rank:"Energy ranking, 24 h",rankX:"line = median",insights:"Insights",health:"Array health",healthX:"how evenly panels produce right now",heat:"Heatmap",heatX:"each row a panel, each cell 15 min",
@@ -319,7 +327,7 @@ iOff:"{c} panel(s) offline: {l}",iUnc:"{c} optimizer(s) reporting without a slot
 iMm:"Mismatch {m}%: check shading or soiling",
 cName:"Panel",cP:"Power",cVin:"V in",cVout:"V out",cI:"Current",cT:"Temp",cR:"RSSI",cD:"Duty",cE:"Energy 24 h",cDev:"vs median",cAge:"Age",
 dAddr:"Long address",dNode:"Node",dHw:"Hardware ID",dScale:"Current scale",dE:"Energy since boot",dCurve:"Last 24 h vs median",uptime:"Uptime",slots:"Automatic slots",slotsU:"used",timeout:"Offline after",panelsN:"Panels",unknown:"unknown"},
-it:{esphome:"UI ESPHome",tOv:"Panoramica",tAn:"Analisi",tPn:"Pannelli",tSy:"Sistema",now:"Potenza impianto ora",peak:"Picco (sessione)",e24:"Energia 24 h",avgp:"Media / pannello",
+it:{s7d:"7 giorni",s30d:"30 giorni",s12m:"12 mesi",since2:"storico dal {d}",stackD:"Energia giornaliera",stackM:"Energia mensile",stack7:"Produzione, ultimi 7 giorni",stackXh:"potenza media oraria, impilata per pannello",stackXd:"energia al giorno, impilata per pannello",stackXm:"energia al mese, impilata per pannello",heatXr:"ogni cella: resa del pannello rispetto al migliore di quel periodo",rankR:"Classifica energia",iLowR:"{n}: {d}% di energia in meno della mediana nel periodo",noData:"Ancora nessuno storico: l'add-on registra i dati da adesso.",esphome:"UI ESPHome",tOv:"Panoramica",tAn:"Analisi",tPn:"Pannelli",tSy:"Sistema",now:"Potenza impianto ora",peak:"Picco (sessione)",e24:"Energia 24 h",avgp:"Media / pannello",
 online:"Pannelli online",mismatch:"Mismatch",temp:"Temperatura",vin:"Tensione ingresso",live:"Potenza live",liveX:"ultimi 30 min · questo browser",array:"Impianto",arrayX:"luce = quota del pannello migliore · tocca un pannello",
 noPanels:"Nessun pannello configurato. Aggiungi panels: N (posti automatici) o blocchi long_address nel YAML.",stack:"Produzione, ultime 24 h",stackX:"potenza media ogni 15 min, impilata per pannello",
 rank:"Classifica energia, 24 h",rankX:"linea = mediana",insights:"Analisi",health:"Salute impianto",healthX:"quanto producono in modo uniforme ora",heat:"Mappa di calore",heatX:"una riga per pannello, una cella ogni 15 min",
@@ -348,7 +356,7 @@ $("#lang").onclick=()=>{lang=lang==="it"?"en":"it";store.set("lang",lang);applyL
 /* ---------- helpers ---------- */
 const fmt=(v,d=0)=>v==null||isNaN(v)?"–":Number(v).toFixed(d);
 const sgn=v=>{const r=Math.round(v);return (r>0?"+":"")+(r||0)+"%"};
-const fmtE=wh=>wh==null?"–":wh>=1000?(wh/1000).toFixed(2)+" kWh":wh.toFixed(0)+" Wh";
+const fmtE=wh=>wh==null?"–":wh>=1e5?(wh/1000).toFixed(0)+" kWh":wh>=1e4?(wh/1000).toFixed(1)+" kWh":wh>=1000?(wh/1000).toFixed(2)+" kWh":wh.toFixed(0)+" Wh";
 const median=a=>{if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -372,13 +380,13 @@ let peak=store.get("peak",{d:"",w:0});
 
 async function getJSON(u){const r=await fetch(u,{cache:"no-store"});if(!r.ok)throw new Error(r.status);return r.json()}
 async function pollLive(){
-  try{live=DEMO?demoLive():await getJSON("/tigo/live");mode=DEMO?"demo":"live";fails=0;
+  try{live=DEMO?demoLive():await getJSON("tigo/live");mode=DEMO?"demo":"live";fails=0;
     const tot=totalPower();samples.push([Date.now(),tot]);samples=samples.filter(s=>Date.now()-s[0]<1800e3);store.set("samples",samples);
     const day=new Date().toDateString();if(peak.d!==day)peak={d:day,w:0};if(tot>peak.w){peak.w=tot;store.set("peak",peak)}
   }catch(e){if(++fails>2)mode="offline"}
   render();
 }
-async function pollHist(){try{hist=DEMO?demoHist():await getJSON("/tigo/history");renderAnalysis()}catch(e){}}
+async function pollHist(){try{hist=DEMO?demoHist():await getJSON("tigo/history");renderAnalysis()}catch(e){}}
 
 const panels=()=>live?live.panels:[];
 const onl=()=>panels().filter(p=>p.online&&p.p!=null);
@@ -466,9 +474,69 @@ function drawArray(){
 }
 
 /* ---------- analysis ---------- */
+function setT(id,k){const e=$("#"+id);e.dataset.t=k;e.textContent=t(k)}
 function renderAnalysis(){
   if(tab!=="an"||!live)return;
-  drawStack();drawRank();drawInsights();drawHeat();
+  if(span==="24h"){
+    setT("stackT","stack");setT("stackXT","stackX");setT("rankT","rank");setT("heatXT","heatX");
+    drawStack();drawRankItems(panels().map((p,i)=>({name:p.name,e:p.e24||0,i})));drawInsights();drawHeat();
+    return;
+  }
+  const u=range&&range.unit;
+  setT("stackT",span==="7d"?"stack7":u==="month"?"stackM":"stackD");setT("stackXT",u==="hour"?"stackXh":u==="month"?"stackXm":"stackXd");
+  setT("rankT","rankR");setT("heatXT",u==="hour"?"heatX":"heatXr");
+  drawRangeStack();drawRankItems(rangeTotals());drawInsights();drawRangeHeat();
+}
+
+/* ---------- long history (Home Assistant add-on only) ---------- */
+let addon=null,span="24h",range=null;
+async function detectAddon(){
+  if(DEMO){if(new URLSearchParams(location.search).has("addon"))addon={addon:true,since:Date.now()/1e3-86400*200}}
+  else{try{const i=await getJSON("tigo/info");if(i&&i.addon)addon=i}catch(e){}}
+  if(!addon)return;
+  $("#spans").hidden=false;$("#espui").hidden=true;$("#sub").textContent="Home Assistant";
+  $("#since").textContent=addon.since?t("since2",{d:new Date(addon.since*1e3).toLocaleDateString(lang)}):"";
+  const q=new URLSearchParams(location.search).get("span");if(q&&q!=="24h"){const b=document.querySelector(`[data-span="${q}"]`);if(b)b.click()}
+}
+$$("#spans button").forEach(b=>b.onclick=()=>{span=b.dataset.span;$$("#spans button").forEach(x=>x.classList.toggle("on",x===b));loadRange()});
+async function loadRange(){
+  if(span!=="24h"){try{range=DEMO?demoRange(span):await getJSON("tigo/range?span="+span)}catch(e){range=null}}
+  renderAnalysis();
+}
+const ridx=key=>panels().findIndex(p=>(p.addr||p.name)===key);
+function rangeTotals(){if(!range)return [];return range.panels.map((p,k)=>({name:p.name,e:range.data[k].reduce((a,b)=>a+b,0),i:ridx(p.key)}))}
+function rangeLabel(ts){const d=new Date(ts*1e3),u=range.unit;
+  return u==="hour"?d.toLocaleDateString(lang,{weekday:"short"})+" "+String(d.getHours()).padStart(2,"0")+":00":u==="day"?d.toLocaleDateString(lang,{day:"2-digit",month:"2-digit"}):d.toLocaleDateString(lang,{month:"short",year:"2-digit"})}
+function drawRangeStack(){
+  const svg=$("#stackC"),W=900,H=240;
+  if(!range||!range.panels.length){svg.innerHTML=`<text x="450" y="120" text-anchor="middle">${esc(range?t("noData"):"…")}</text>`;$("#stackL").innerHTML="";return}
+  const n=range.start.length,hour=range.unit==="hour",conv=v=>hour?v:v/1000,unit=hour?"W":"kWh";
+  const series=range.data.map(a=>a.map(conv)),tot=[];for(let k=0;k<n;k++)tot.push(series.reduce((s,a)=>s+a[k],0));
+  const mx=Math.max(hour?10:.1,...tot)*1.1,Y=v=>H-18-(v/mx)*(H-30);
+  let marks="";
+  if(n>60){const X=k=>k/(n-1)*W;let acc=new Array(n).fill(0);
+    series.forEach((a,i)=>{const lo=acc.slice(),hi=acc.map((v,k)=>v+a[k]);acc=hi;
+      let d="M0 "+Y(hi[0]);for(let k=1;k<n;k++)d+="L"+X(k).toFixed(1)+" "+Y(hi[k]).toFixed(1);for(let k=n-1;k>=0;k--)d+="L"+X(k).toFixed(1)+" "+Y(lo[k]).toFixed(1);
+      marks+=`<path d="${d}Z" fill="${pcol(i)}" fill-opacity=".78" stroke="${pcol(i)}" stroke-width=".6"><title>${esc(range.panels[i].name)}</title></path>`});
+  }else{const bw=W/n,gap=Math.min(6,bw*.25);
+    for(let k=0;k<n;k++){let y0=H-18;series.forEach((a,i)=>{const h=(H-18)-Y(a[k]);if(h<=0)return;y0-=h;
+      marks+=`<rect x="${(k*bw+gap/2).toFixed(1)}" y="${y0.toFixed(1)}" width="${(bw-gap).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${pcol(i)}" fill-opacity=".85"><title>${esc(range.panels[i].name)} · ${rangeLabel(range.start[k])} · ${fmt(a[k],2)} ${unit}</title></rect>`})}
+  }
+  const step=Math.max(1,Math.ceil(n/7));let ax="";
+  for(let k=0;k<n;k+=step){const x=n>60?k/(n-1)*W:(k+.5)*W/n;ax+=`<text x="${x.toFixed(1)}" y="${H-2}" text-anchor="${n>60&&!k?"start":"middle"}">${rangeLabel(range.start[k])}</text>`}
+  let grid="";for(let i=1;i<4;i++){const y=(H-18)*i/4;grid+=`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="${cssv("--line")}" stroke-dasharray="3 5"/>`}
+  svg.innerHTML=grid+marks+ax+`<text x="${W}" y="12" text-anchor="end">${fmt(mx/1.1,hour?0:1)} ${unit}</text>`;
+  $("#stackL").innerHTML=range.panels.map((p,i)=>`<span><i style="background:${pcol(i)}"></i>${esc(p.name)}</span>`).join("");
+}
+function drawRangeHeat(){
+  if(!range||!range.panels.length){$("#heat").innerHTML="";$("#heatAx").innerHTML="";return}
+  const n=range.start.length,hour=range.unit==="hour";
+  const colMax=[];for(let k=0;k<n;k++)colMax.push(Math.max(...range.data.map(a=>a[k])));
+  const all=Math.max(.1,...colMax);
+  $("#heat").innerHTML=range.data.map((a,i)=>`<div class="row"><span class="lab">${esc(range.panels[i].name)}</span><span class="cells" style="grid-template-columns:repeat(${n},1fr)">${a.map((v,k)=>{
+    const x=hour?Math.sqrt(v/all):colMax[k]>0?v/colMax[k]:0,bg=colMax[k]>0?(hour?heatColor(x):heatColor(.15+.85*x*x*x)):"transparent";
+    return `<i style="background:${bg}" title="${rangeLabel(range.start[k])} · ${hour?fmt(v)+" Wh":fmt(v/1000,2)+" kWh"+(colMax[k]>0?" · "+fmt(x*100)+"%":"")}"></i>`}).join("")}</span></div>`).join("");
+  $("#heatAx").innerHTML=[0,Math.floor(n/4),Math.floor(n/2),Math.floor(3*n/4),n-1].map(k=>`<span>${rangeLabel(range.start[k])}</span>`).join("");
 }
 function bucketLabels(n){const now=new Date(),b=(hist&&hist.bucket||900)*1e3,out=[];for(let k=0;k<n;k++){const d=new Date(now-(n-1-k)*b);out.push(d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0"))}return out}
 function drawStack(){
@@ -490,20 +558,22 @@ function drawStack(){
   svg.innerHTML=grid+paths+cut+ax+`<text x="${W}" y="12" text-anchor="end">${fmt(mx/1.1)} W</text>`;
   $("#stackL").innerHTML=P.map((p,i)=>`<span><i style="background:${pcol(i)}"></i>${esc(p.name)}</span>`).join("");
 }
-function drawRank(){
-  const P=panels().map((p,i)=>({...p,i})).sort((a,b)=>(b.e24||0)-(a.e24||0));
-  const mx=Math.max(1,...P.map(p=>p.e24||0)),med=median(P.filter(p=>p.e24>0).map(p=>p.e24));
-  $("#rank").innerHTML=P.length?P.map((p,k)=>{const dev=med>0?((p.e24||0)-med)/med*100:0,c=dev>3?"pos-c":dev<-10?"neg-c":"mid-c";
-    return `<div class="rk" data-i="${p.i}"><span class="pos">${k+1}</span><span class="nm">${esc(p.name)}</span><span class="tr"><i style="width:${((p.e24||0)/mx*100).toFixed(1)}%"></i>${med>0?`<b style="left:${(med/mx*100).toFixed(1)}%"></b>`:""}</span><span class="val">${fmtE(p.e24||0)}</span><span class="dev ${c}">${med>0?sgn(dev):""}</span></div>`}).join(""):`<div class="empty">–</div>`;
-  $$(".rk").forEach(r=>r.onclick=()=>openPanel(+r.dataset.i));
+function drawRankItems(items){
+  const P=items.slice().sort((a,b)=>b.e-a.e);
+  const mx=Math.max(1,...P.map(p=>p.e)),med=median(P.filter(p=>p.e>0).map(p=>p.e));
+  $("#rank").innerHTML=P.length?P.map((p,k)=>{const dev=med>0?(p.e-med)/med*100:0,c=dev>3?"pos-c":dev<-10?"neg-c":"mid-c";
+    return `<div class="rk" data-i="${p.i}"><span class="pos">${k+1}</span><span class="nm">${esc(p.name)}</span><span class="tr"><i style="width:${(p.e/mx*100).toFixed(1)}%"></i>${med>0?`<b style="left:${(med/mx*100).toFixed(1)}%"></b>`:""}</span><span class="val">${fmtE(p.e)}</span><span class="dev ${c}">${med>0?sgn(dev):""}</span></div>`}).join(""):`<div class="empty">–</div>`;
+  $$(".rk").forEach(r=>r.onclick=()=>{const i=+r.dataset.i;if(i>=0)openPanel(i)});
 }
 function insights(){
   const P=panels(),O=onl(),out=[],med=median(O.map(p=>p.p));
   const off=P.filter(p=>!p.online);if(off.length)out.push(["bad","⏻",t("iOff",{c:off.length,l:off.map(p=>p.name).join(", ")})]);
   if(med>20){O.filter(p=>p.p<med*.85).sort((a,b)=>a.p-b.p).forEach(p=>out.push([p.p<med*.7?"bad":"warn","↓",t("iLow",{n:p.name,d:fmt((1-p.p/med)*100)})]));}
   else out.push(["info","☾",t("iNight")]);
+  if(span!=="24h"&&range){const tt=rangeTotals(),mr=median(tt.filter(x=>x.e>0).map(x=>x.e));
+    if(mr>100)tt.filter(x=>x.e>0&&x.e<mr*.9).sort((a,b)=>a.e-b.e).forEach(x=>out.push([x.e<mr*.8?"bad":"warn","Σ",t("iLowR",{n:x.name,d:fmt((1-x.e/mr)*100)})]))}
   const m24=median(P.filter(p=>p.e24>0).map(p=>p.e24));
-  if(m24>50)P.filter(p=>p.e24>0&&p.e24<m24*.85).forEach(p=>out.push(["warn","Σ",t("iLow24",{n:p.name,d:fmt((1-p.e24/m24)*100)})]));
+  if(span==="24h"&&m24>50)P.filter(p=>p.e24>0&&p.e24<m24*.85).forEach(p=>out.push(["warn","Σ",t("iLow24",{n:p.name,d:fmt((1-p.e24/m24)*100)})]));
   P.filter(p=>p.t!=null&&p.t>=70).forEach(p=>out.push(["warn","♨",t("iHot",{n:p.name,t:fmt(p.t,1)})]));
   const rs=P.filter(p=>p.rssi!=null),mr=median(rs.map(p=>p.rssi));
   rs.filter(p=>p.rssi<mr*.6).forEach(p=>out.push(["info","⌁",t("iRssi",{n:p.name,r:fmt(p.rssi)})]));
@@ -557,7 +627,7 @@ function renderSystem(){
   $("#dev").innerHTML=[[t("uptime"),`${Math.floor(up/86400)}d ${Math.floor(up%86400/3600)}h ${Math.floor(up%3600/60)}m`],[t("panelsN"),panels().length],[t("slots"),live.slots?`${used} ${t("slotsU")} / ${live.slots}`:"–"],[t("timeout"),live.timeout+" s"]].map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
   $("#reset").hidden=!live.slots;
 }
-$("#reset").onclick=async()=>{if(!confirm(t("resetQ")))return;try{if(!DEMO)await fetch("/tigo/reset",{method:"POST"});toast(t("resetOk"));pollLive()}catch(e){toast("✕")}};
+$("#reset").onclick=async()=>{if(!confirm(t("resetQ")))return;try{if(!DEMO)await fetch("tigo/reset",{method:"POST"});toast(t("resetOk"));pollLive()}catch(e){toast("✕")}};
 
 /* ---------- drawer ---------- */
 const scale=h=>h<0?null:h<=0x23?0.0025:h<=0x5f?0.005:0.025;
@@ -600,11 +670,23 @@ function demoHist(){
   return {bucket:900,valid:96,into:450e3,panels};
 }
 
+function demoRange(sp){
+  const names=["A1","A2","A3","A4","A5","A6","B1","B2","B3","B4","B5","B6"],unit=sp==="7d"?"hour":sp==="30d"?"day":"month",n=sp==="7d"?168:sp==="30d"?30:12;
+  const now=new Date(),start=[];
+  for(let k=n-1;k>=0;k--){let d=new Date(now);if(unit==="hour"){d.setMinutes(0,0,0);d=new Date(d-k*36e5)}else if(unit==="day"){d.setHours(0,0,0,0);d.setDate(d.getDate()-k)}else{d=new Date(now.getFullYear(),now.getMonth()-k,1)}start.push(Math.floor(d/1e3))}
+  const data=names.map((nm,i)=>start.map((ts,k)=>{const d=new Date(ts*1e3);let v;
+    if(unit==="hour"){const h=d.getHours(),sun=Math.max(0,Math.sin((h-6.2)/12.6*Math.PI)),cloud=[1,.55,.9,1,.35,.95,1][d.getDay()];v=sun*cloud*330*(nm==="B4"&&h>=13?.45:1)}
+    else{const m=d.getMonth(),season=.45+.55*Math.sin((m+.5-2)/12*Math.PI*1.1),days=unit==="month"?30:1,w=unit==="day"?(.5+.5*Math.abs(Math.sin(k*1.7))):1;
+      v=2300*season*days*w*(nm==="B4"?(m>=3&&m<=8?.85:.6):1)*(nm==="A6"&&k>n-8?.8:1)}
+    return +(v*(1+.015*(i%3))).toFixed(1)}));
+  return {unit,start,panels:names.map((nm,i)=>({key:"04C05B4000B1A6"+(0x80+i).toString(16).toUpperCase(),name:nm})),data};
+}
+
 /* ---------- start ---------- */
 if(DEMO&&samples.length<10){const L=demoLive(),tot=L.panels.reduce((s,p)=>s+p.p,0);samples=[];for(let k=720;k>0;k--)samples.push([Date.now()-k*2500,tot*(1-.12*Math.max(0,Math.sin(k/90))+.02*Math.sin(k/7))])}
 applyLang();
 {const h=new URLSearchParams(location.search).get("tab"),b=h&&document.querySelector(`[data-tab="${h}"]`);if(b)b.click()}
-pollLive();pollHist();
+pollLive();pollHist();detectAddon();
 setInterval(pollLive,2500);setInterval(pollHist,60e3);
 setInterval(()=>{if(tab==="ov"&&live)drawLive()},5e3);
 </script>
