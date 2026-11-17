@@ -57,54 +57,108 @@ Avoid the USB serial pins (GPIO 1/3 on the ESP32): the ESPHome logger uses them.
 
 ## Installation
 
-1. Copy [`example.yaml`](example.yaml) into your ESPHome configuration and set Wi-Fi and `rx_pin`.
-2. The component is downloaded from GitHub:
-   ```yaml
-   external_components:
-     - source: github://Bobsilvio/tigo_server@main
-       components: [tigo_rs485]
-   ```
-3. Configure the UART and the component:
-   ```yaml
-   uart:
-     id: tigo_bus
-     rx_pin: GPIO16
-     baud_rate: 38400
-     rx_buffer_size: 2048
+The component is added to an ESPHome device step by step: each step adds a few lines to your device's YAML,
+there is no file to copy.
 
-   tigo_rs485:
-     uart_id: tigo_bus
-     offline_timeout: 5min   # optional
-   ```
-4. Flash once with only the unconfigured panels sensor:
-   ```yaml
-   text_sensor:
-     - platform: tigo_rs485
-       unconfigured_panels:
-         name: Unconfigured panels
-   ```
-   Once the sun is up, the long addresses appear there and in the logs (`Unconfigured panel reporting: 04C05B4000B1A688`).
-5. Add one block per panel:
-   ```yaml
-   sensor:
-     - platform: tigo_rs485
-       long_address: "04C05B4000B1A688"
-       power:
-         name: A1 Power
-       voltage_in:
-         name: A1 Voltage In
-       voltage_out:
-         name: A1 Voltage Out
-       current:
-         name: A1 Current
-       temperature:
-         name: A1 Temperature
-       rssi:
-         name: A1 RSSI
-       duty_cycle:
-         name: A1 Duty Cycle
-   ```
-   All sensors are optional.
+### 1. Create the ESPHome device
+
+In the ESPHome dashboard (Home Assistant add-on or standalone): **+ New device** → ESP32, then the first install
+over USB. The device YAML already contains `esphome:`, `esp32:`, `wifi:`, `api:` and `ota:`: leave them as they are.
+If you already have an ESP32 in ESPHome, use that one and skip this step.
+
+### 2. Add the component
+
+Open the device YAML (**Edit**) and add these lines at the end:
+
+```yaml
+external_components:
+  - source: github://Bobsilvio/tigo_server@main
+    components: [tigo_rs485]
+
+uart:
+  id: tigo_bus
+  rx_pin: GPIO16          # pin wired to the module's TXD
+  baud_rate: 38400
+  rx_buffer_size: 2048
+
+tigo_rs485:
+  uart_id: tigo_bus
+
+text_sensor:
+  - platform: tigo_rs485
+    unconfigured_panels:
+      name: Unconfigured panels
+```
+
+> If the YAML already has a `text_sensor:` section, add only the `- platform: tigo_rs485` entry under it: a section
+> cannot appear twice. The same applies to `sensor:` in the next steps.
+
+### 3. Install and read the panel addresses
+
+**Save** → **Install** → **Wirelessly**. When the sun is up the optimizers start reporting and their long addresses
+appear:
+
+- in Home Assistant, in the **Unconfigured panels** entity of the device;
+- in the ESPHome logs: `Unconfigured panel reporting: 04C05B4000B1A688`.
+
+Write down every address: you need one per panel.
+
+### 4. Add the panels
+
+For each address add a block under `sensor:` with the name you want to see in Home Assistant:
+
+```yaml
+sensor:
+  - platform: tigo_rs485
+    long_address: "04C05B4000B1A688"
+    power:
+      name: A1 Power
+    voltage_in:
+      name: A1 Voltage In
+    voltage_out:
+      name: A1 Voltage Out
+    current:
+      name: A1 Current
+    temperature:
+      name: A1 Temperature
+    rssi:
+      name: A1 RSSI
+    duty_cycle:
+      name: A1 Duty Cycle
+
+  - platform: tigo_rs485
+    long_address: "04C05B4000B1A689"
+    power:
+      name: A2 Power
+```
+
+Every sensor is optional: keep only the ones you need (e.g. just `power`, as for A2). Install again: configured
+panels disappear from **Unconfigured panels** and show up as entities.
+
+### 5. Energy (optional)
+
+For the Home Assistant Energy dashboard, give the power sensor an `id` and integrate it on the device, still
+under `sensor:`:
+
+```yaml
+  - platform: tigo_rs485
+    long_address: "04C05B4000B1A688"
+    power:
+      name: A1 Power
+      id: a1_power
+
+  - platform: integration
+    name: A1 Energy
+    sensor: a1_power
+    time_unit: h
+    unit_of_measurement: Wh
+    device_class: energy
+    state_class: total_increasing
+    restore: true
+```
+
+[`example.yaml`](example.yaml) is a complete configuration, with a total-power sensor too: use it as a reference to
+check yours, not as a file to copy.
 
 ### Long address not known yet
 
@@ -118,11 +172,6 @@ its short ID, knowing that the CCA may reassign it:
     power:
       name: A3 Power
 ```
-
-### Energy
-
-Energy is obtained by integrating power on the device with the standard `integration` platform
-(see `example.yaml`), usable in the Home Assistant Energy dashboard.
 
 ---
 

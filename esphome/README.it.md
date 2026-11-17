@@ -57,54 +57,108 @@ Evita i pin della seriale USB (GPIO 1/3 su ESP32): il logger di ESPHome li usa.
 
 ## Installazione
 
-1. Copia [`example.yaml`](example.yaml) nella tua configurazione ESPHome e imposta Wi-Fi e `rx_pin`.
-2. Il componente si scarica da GitHub:
-   ```yaml
-   external_components:
-     - source: github://Bobsilvio/tigo_server@main
-       components: [tigo_rs485]
-   ```
-3. Configura UART e componente:
-   ```yaml
-   uart:
-     id: tigo_bus
-     rx_pin: GPIO16
-     baud_rate: 38400
-     rx_buffer_size: 2048
+Il componente si aggiunge a un dispositivo ESPHome passo per passo: ogni passo aggiunge poche righe al YAML del
+dispositivo, non c'è un file da copiare.
 
-   tigo_rs485:
-     uart_id: tigo_bus
-     offline_timeout: 5min   # opzionale
-   ```
-4. Flasha una prima volta con solo il sensore dei pannelli non configurati:
-   ```yaml
-   text_sensor:
-     - platform: tigo_rs485
-       unconfigured_panels:
-         name: Unconfigured panels
-   ```
-   Appena il sole è alto i long address compaiono lì e nei log (`Unconfigured panel reporting: 04C05B4000B1A688`).
-5. Aggiungi un blocco per ogni pannello:
-   ```yaml
-   sensor:
-     - platform: tigo_rs485
-       long_address: "04C05B4000B1A688"
-       power:
-         name: A1 Power
-       voltage_in:
-         name: A1 Voltage In
-       voltage_out:
-         name: A1 Voltage Out
-       current:
-         name: A1 Current
-       temperature:
-         name: A1 Temperature
-       rssi:
-         name: A1 RSSI
-       duty_cycle:
-         name: A1 Duty Cycle
-   ```
-   Tutti i sensori sono opzionali.
+### 1. Crea il dispositivo ESPHome
+
+Nella dashboard ESPHome (add-on di Home Assistant o standalone): **+ New device** → ESP32, poi la prima
+installazione via USB. Il YAML del dispositivo contiene già `esphome:`, `esp32:`, `wifi:`, `api:` e `ota:`: lasciali
+come sono. Se hai già un ESP32 in ESPHome usa quello e salta questo passo.
+
+### 2. Aggiungi il componente
+
+Apri il YAML del dispositivo (**Edit**) e aggiungi in fondo queste righe:
+
+```yaml
+external_components:
+  - source: github://Bobsilvio/tigo_server@main
+    components: [tigo_rs485]
+
+uart:
+  id: tigo_bus
+  rx_pin: GPIO16          # pin collegato al TXD del modulo
+  baud_rate: 38400
+  rx_buffer_size: 2048
+
+tigo_rs485:
+  uart_id: tigo_bus
+
+text_sensor:
+  - platform: tigo_rs485
+    unconfigured_panels:
+      name: Unconfigured panels
+```
+
+> Se il YAML ha già una sezione `text_sensor:`, aggiungi sotto solo la voce `- platform: tigo_rs485`: una sezione
+> non può comparire due volte. Lo stesso vale per `sensor:` nei passi successivi.
+
+### 3. Installa e leggi gli indirizzi dei pannelli
+
+**Save** → **Install** → **Wirelessly**. Quando c'è sole gli ottimizzatori iniziano a trasmettere e i loro long
+address compaiono:
+
+- in Home Assistant, nell'entità **Unconfigured panels** del dispositivo;
+- nei log di ESPHome: `Unconfigured panel reporting: 04C05B4000B1A688`.
+
+Annota tutti gli indirizzi: ne serve uno per pannello.
+
+### 4. Aggiungi i pannelli
+
+Per ogni indirizzo aggiungi un blocco sotto `sensor:` con il nome che vuoi vedere in Home Assistant:
+
+```yaml
+sensor:
+  - platform: tigo_rs485
+    long_address: "04C05B4000B1A688"
+    power:
+      name: A1 Power
+    voltage_in:
+      name: A1 Voltage In
+    voltage_out:
+      name: A1 Voltage Out
+    current:
+      name: A1 Current
+    temperature:
+      name: A1 Temperature
+    rssi:
+      name: A1 RSSI
+    duty_cycle:
+      name: A1 Duty Cycle
+
+  - platform: tigo_rs485
+    long_address: "04C05B4000B1A689"
+    power:
+      name: A2 Power
+```
+
+Tutti i sensori sono opzionali: tieni solo quelli che ti servono (ad esempio solo `power`, come per A2). Installa di
+nuovo: i pannelli configurati spariscono da **Unconfigured panels** e compaiono come entità.
+
+### 5. Energia (opzionale)
+
+Per la dashboard Energia di Home Assistant dai un `id` al sensore di potenza e integralo sul dispositivo, sempre
+sotto `sensor:`:
+
+```yaml
+  - platform: tigo_rs485
+    long_address: "04C05B4000B1A688"
+    power:
+      name: A1 Power
+      id: a1_power
+
+  - platform: integration
+    name: A1 Energy
+    sensor: a1_power
+    time_unit: h
+    unit_of_measurement: Wh
+    device_class: energy
+    state_class: total_increasing
+    restore: true
+```
+
+[`example.yaml`](example.yaml) è una configurazione completa, anche con un sensore di potenza totale: usala come
+riferimento per controllare la tua, non come file da copiare.
 
 ### Long address non ancora noto
 
@@ -118,11 +172,6 @@ usarlo temporaneamente con l'ID corto, sapendo che il CCA può riassegnarlo:
     power:
       name: A3 Power
 ```
-
-### Energia
-
-L'energia si ottiene integrando la potenza sul dispositivo con la piattaforma standard `integration`
-(vedi `example.yaml`), utilizzabile nella dashboard Energia di Home Assistant.
 
 ---
 
