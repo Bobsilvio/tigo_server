@@ -10,6 +10,14 @@
 #include <time.h>
 #include <freertos/semphr.h>
 
+// JSON documents live on the heap: with ArduinoJson 6 a StaticJsonDocument of 8-16 KB sits
+// on the 8 KB loop() stack and overflows it. ArduinoJson 7 always uses the heap.
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+#define HEAP_JSON_DOC(name, size) JsonDocument name
+#else
+#define HEAP_JSON_DOC(name, size) DynamicJsonDocument name(size)
+#endif
+
 const char* hostname = "TigoServer";
 const char* TZ_STRING = "CET-1CEST,M3.5.0/2,M10.5.0/3"; // Modifica per il tuo fuso orario
 const char* ssid = ""; //SSID
@@ -226,7 +234,7 @@ bool isKnownPvType(int t) {
 
 void WebsocketSend(bool send_all = false) {
   DataLock lock;
-  StaticJsonDocument<8192> doc; 
+  HEAP_JSON_DOC(doc, 8192); 
   JsonArray array = doc.to<JsonArray>();
   for (int i = 0; i < deviceCount; i++) {
     if (devices[i].changed || send_all == true) {
@@ -401,7 +409,7 @@ void loop() {
 void loadPanelMap() {
   File file = SPIFFS.open("/panel_map.json", "r");
   if (!file) { Serial.println("No panel_map.json, starting empty."); return; }
-  StaticJsonDocument<4096> doc;
+  HEAP_JSON_DOC(doc, 4096);
   DeserializationError err = deserializeJson(doc, file);
   file.close();
   if (err) { Serial.println("panel_map.json: parse error"); return; }
@@ -419,7 +427,7 @@ void loadPanelMap() {
 void savePanelMap() {
   File file = SPIFFS.open("/panel_map.json", FILE_WRITE);
   if (!file) { Serial.println("Impossibile scrivere panel_map.json"); return; }
-  StaticJsonDocument<4096> doc;
+  HEAP_JSON_DOC(doc, 4096);
   JsonArray arr = doc.to<JsonArray>();
   for (int i = 0; i < panelMap_count; i++) {
     JsonObject obj = arr.createNestedObject();
@@ -438,7 +446,7 @@ void loadNodeTable() {
     Serial.println("Failed to open file for reading");
     return;
   }
-  StaticJsonDocument<8192> doc;
+  HEAP_JSON_DOC(doc, 8192);
   DeserializationError error = deserializeJson(doc, file);
   if (error) {
     Serial.println("Failed to parse JSON");
@@ -500,7 +508,7 @@ void saveNodeTable() {
   }
 
   // Document size: aumentato per sicurezza (ogni entry ~ 64-128 bytes)
-  StaticJsonDocument<16384> doc; // aumentato da 4096 -> 16384
+  HEAP_JSON_DOC(doc, 16384); // aumentato da 4096 -> 16384
   JsonArray arr = doc.to<JsonArray>();
 
   for (int i = 0; i < NodeTable_count; i++) {
