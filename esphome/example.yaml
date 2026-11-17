@@ -1,7 +1,8 @@
 # Tigo RS485 Monitor - ESPHome example
 #
+# Reference configuration: the README explains each part step by step.
 # Wiring: RS-485 transceiver in receive-only mode (RE/DE to GND), A/B in parallel
-# with the TAP <-> CCA bus, RO -> rx_pin. The ESP32 never transmits on the bus.
+# with the TAP <-> CCA bus, RO/TXD -> rx_pin. The ESP32 never transmits on the bus.
 
 esphome:
   name: tigo-rs485
@@ -13,8 +14,6 @@ esp32:
     type: esp-idf
 
 logger:
-  # Avoid sharing UART0 with the bus
-  baud_rate: 115200
 
 api:
 ota:
@@ -24,14 +23,14 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
+# Web dashboard at http://tigo-rs485.local/ (standard ESPHome page at /?esphome)
+web_server:
+  port: 80
+
 external_components:
   # ESPHome finds the esphome/components folder of the repository by itself
   - source: github://Bobsilvio/tigo_server@main
     components: [tigo_rs485]
-    # To use a local copy instead:
-    # source:
-    #   type: local
-    #   path: components
 
 uart:
   id: tigo_bus
@@ -41,51 +40,37 @@ uart:
 
 tigo_rs485:
   uart_id: tigo_bus
-  offline_timeout: 5min
+  # Automatic slots: each optimizer takes the first free one as soon as its long
+  # address is known. Entities: "Panel 1 Power", ..., "Panel 1 Address".
+  panels: 12
+  # Optional:
+  # panel_name: "Panel {}"
+  # panel_sensors: [power, voltage_in, voltage_out, current, temperature, rssi, duty_cycle]
+  # offline_timeout: 5min
+  # web_dashboard: true
 
 text_sensor:
-  # Long addresses of panels that report but are not configured below:
-  # copy them into a "long_address:" entry.
+  # Optimizers reporting without a slot or a long_address entry
   - platform: tigo_rs485
     unconfigured_panels:
       name: Unconfigured panels
 
 sensor:
-  # One block per optimizer. Use the long address (stable, fixed in hardware).
+  # Optional: a panel with fixed names, declared by its long address.
+  # It does not take an automatic slot.
   - platform: tigo_rs485
     long_address: "04C05B4000B1A688"
     power:
-      name: A1 Power
+      name: Roof A1 Power
       id: a1_power
     voltage_in:
-      name: A1 Voltage In
-    voltage_out:
-      name: A1 Voltage Out
-    current:
-      name: A1 Current
+      name: Roof A1 Voltage In
     temperature:
-      name: A1 Temperature
-    rssi:
-      name: A1 RSSI
-    duty_cycle:
-      name: A1 Duty Cycle
+      name: Roof A1 Temperature
 
-  - platform: tigo_rs485
-    long_address: "04C05B4000B1A689"
-    power:
-      name: A2 Power
-      id: a2_power
-
-  # Fallback when the long address is not known yet: the short node ID assigned
-  # by the CCA (it can change after a rediscovery).
-  # - platform: tigo_rs485
-  #   node_id: 0x001C
-  #   power:
-  #     name: A3 Power
-
-  # Energy per panel, integrated on the device
+  # Energy of that panel, integrated on the device (for the Energy dashboard)
   - platform: integration
-    name: A1 Energy
+    name: Roof A1 Energy
     sensor: a1_power
     time_unit: h
     unit_of_measurement: Wh
@@ -93,16 +78,9 @@ sensor:
     state_class: total_increasing
     restore: true
 
-  # Total power of the configured panels
-  - platform: template
-    name: Total Power
-    unit_of_measurement: W
-    device_class: power
-    state_class: measurement
-    accuracy_decimals: 0
-    update_interval: 10s
-    lambda: |-
-      float total = 0;
-      for (auto *s : {id(a1_power), id(a2_power)})
-        if (!std::isnan(s->state)) total += s->state;
-      return total;
+  # Fallback when the long address is not known yet: the short node ID assigned
+  # by the CCA (it can change after a rediscovery).
+  # - platform: tigo_rs485
+  #   node_id: 0x001C
+  #   power:
+  #     name: A3 Power

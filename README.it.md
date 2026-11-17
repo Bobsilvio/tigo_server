@@ -49,19 +49,23 @@ L'ESP32 diventa un dispositivo ESPHome: Home Assistant lo trova da solo e ogni p
 - **Ideale se** usi già Home Assistant e vuoi i dati dei pannelli accanto al resto della casa.
 - **Cosa offre**: entità native per potenza, tensioni, corrente, temperatura, RSSI e duty cycle di ogni pannello;
   storico, statistiche a lungo termine, dashboard Energia, automazioni e notifiche (per esempio "B4 produce poco").
-- **Configurazione**: un file YAML; aggiornamenti OTA e log da ESPHome. Il componente si scarica da questo repository.
-- **Limiti**: nessuna pagina web propria; i pannelli vanno elencati nel YAML (un sensore diagnostico mostra quelli
-  non ancora configurati, con l'indirizzo pronto da copiare).
+  In più una dashboard web sull'ESP32 stesso, con produzione delle ultime 24 ore, classifica dell'energia, mappa di
+  calore e analisi automatiche.
+- **Configurazione**: poche righe di YAML, i pannelli si trovano da soli (`panels: 12`); aggiornamenti OTA e log da
+  ESPHome. Il componente si scarica da questo repository.
+- **Limiti**: la dashboard tiene 24 ore in RAM (lo storico lungo è in Home Assistant); i pannelli hanno un nome
+  generico (Panel 1, Panel 2, …) da rinominare in Home Assistant, oppure nomi fissi nel YAML.
 
 ### Le differenze in breve
 
 | | Arduino | ESPHome |
 |---|---|---|
-| Dove vedi i dati | dashboard web dell'ESP32 | Home Assistant |
+| Dove vedi i dati | dashboard web dell'ESP32 | Home Assistant, più la dashboard web dell'ESP32 |
 | Serve Home Assistant | no | sì |
-| Storico | solo a pagina aperta | completo, in Home Assistant |
+| Storico | solo a pagina aperta | completo in Home Assistant; ultime 24 h nella dashboard |
 | Configurazione | Arduino IDE, Wi-Fi e pin nel codice | YAML ESPHome |
-| Nomi dei pannelli | pagina `/panels` | nel YAML |
+| Pannelli nuovi | compaiono da soli | compaiono da soli (posti automatici) |
+| Nomi dei pannelli | pagina `/panels` | rinominati in Home Assistant, o fissi nel YAML |
 | Pannello che smette di trasmettere | dopo 5 minuti `online: false` e valori a 0 | dopo 5 minuti "non disponibile" |
 | Aggiornamenti | OTA Arduino | OTA ESPHome |
 | Integrazione custom in HA | sì (tigosolar-local) | no, nativo |

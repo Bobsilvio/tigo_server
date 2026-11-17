@@ -4,17 +4,25 @@
 
 Variante **ESPHome** di [Tigo RS485 Monitor](../README.it.md): un componente esterno ESPHome (`tigo_rs485`) che ascolta
 il bus RS-485 tra TAP e CCA e pubblica in Home Assistant, in modo nativo, un set di sensori per ogni ottimizzatore.
-Niente integrazione custom, niente WebSocket: Wi-Fi, OTA e log sono quelli standard di ESPHome.
+I pannelli vengono riconosciuti da soli appena trasmettono, e l'ESP32 serve anche una propria dashboard web con dati
+live e analisi. Niente integrazione custom, niente WebSocket: Wi-Fi, OTA e log sono quelli standard di ESPHome.
 
-Per una dashboard web autonoma senza Home Assistant usa la variante [Arduino](../arduino/README.it.md).
+Per un dispositivo autonomo senza Home Assistant usa la variante [Arduino](../arduino/README.it.md).
+
+<img src="../images/example-esphome-dashboard.it.jpg" alt="Dashboard web della variante ESPHome" width="900"/>
 
 ---
 
 ## Cosa fa
 
 - Ascolta il bus in **sola ricezione** (38400 baud 8N1): non trasmette mai, il CCA continua a funzionare come prima.
-- Per ogni pannello configurato pubblica: **potenza**, tensione d'ingresso e d'uscita, **corrente**, **temperatura**,
-  RSSI e duty cycle.
+- **Trova i pannelli da solo**: con `panels: 12` il dispositivo riserva 12 posti e assegna a ogni ottimizzatore il
+  primo libero appena ne conosce il long address. Nessun indirizzo da copiare, nessun elenco da scrivere.
+- Per ogni pannello pubblica **potenza**, tensione d'ingresso e d'uscita, **corrente**, **temperatura**, RSSI e duty
+  cycle, più il long address.
+- Serve una **dashboard web** all'indirizzo del dispositivo: mappa dell'impianto live, produzione delle ultime 24 ore,
+  classifica dell'energia, mappa di calore, analisi automatiche (pannelli che rendono poco, caldi o offline), tabella
+  con esportazione CSV.
 - Decodifica allineata al firmware del CCA (4.0.8), più accurata di taptap:
   - potenza = Vin × Iin, come la calcola il CCA;
   - scala della corrente secondo l'ID hardware del modulo (letto dalle risposte `Version`):
@@ -24,11 +32,9 @@ Per una dashboard web autonoma senza Home Assistant usa la variante [Arduino](..
 
   Dettagli: [docs/PROTOCOL-NOTES.md](../docs/PROTOCOL-NOTES.md).
 - Identifica i pannelli per **long address** (64 bit, fisso nell'hardware), non per l'ID corto che il CCA può
-  riassegnare. L'abbinamento ID corto → long address e l'ID hardware arrivano sul bus di rado: vengono salvati in
-  flash e sopravvivono ai riavvii.
+  riassegnare. L'abbinamento ID corto → long address, l'ID hardware e le assegnazioni dei posti sono salvati in flash
+  e sopravvivono ai riavvii.
 - Un pannello che non trasmette per `offline_timeout` (predefinito 5 minuti) diventa "non disponibile" in Home Assistant.
-- Un sensore di testo diagnostico elenca i pannelli che trasmettono ma non sono ancora configurati, con il loro long
-  address pronto da copiare.
 
 ---
 
@@ -57,8 +63,7 @@ Evita i pin della seriale USB (GPIO 1/3 su ESP32): il logger di ESPHome li usa.
 
 ## Installazione
 
-Il componente si aggiunge a un dispositivo ESPHome passo per passo: ogni passo aggiunge poche righe al YAML del
-dispositivo, non c'è un file da copiare.
+Il componente si aggiunge a un dispositivo ESPHome: poche righe nel YAML del dispositivo, non c'è un file da copiare.
 
 ### 1. Crea il dispositivo ESPHome
 
@@ -83,29 +88,68 @@ uart:
 
 tigo_rs485:
   uart_id: tigo_bus
+  panels: 12              # almeno quanti sono i tuoi ottimizzatori
 
-text_sensor:
-  - platform: tigo_rs485
-    unconfigured_panels:
-      name: Unconfigured panels
+web_server:               # opzionale: la dashboard web
+  port: 80
 ```
 
-> Se il YAML ha già una sezione `text_sensor:`, aggiungi sotto solo la voce `- platform: tigo_rs485`: una sezione
-> non può comparire due volte. Lo stesso vale per `sensor:` nei passi successivi.
+Imposta `panels:` al numero di ottimizzatori, o poco di più: i posti non usati restano vuoti.
 
-### 3. Installa e leggi gli indirizzi dei pannelli
+> Se il YAML ha già una sezione `web_server:` non aggiungerne una seconda: la dashboard usa quella esistente.
 
-**Save** → **Install** → **Wirelessly**. Quando c'è sole gli ottimizzatori iniziano a trasmettere e i loro long
-address compaiono:
+### 3. Installa
 
-- in Home Assistant, nell'entità **Unconfigured panels** del dispositivo;
-- nei log di ESPHome: `Unconfigured panel reporting: 04C05B4000B1A688`.
+**Save** → **Install** → **Wirelessly**. Quando c'è sole gli ottimizzatori iniziano a trasmettere e riempiono i
+posti: in Home Assistant il dispositivo mostra `Panel 1 Power`, `Panel 1 Voltage In`, …, `Panel 1 Address` e così via.
+Apri `http://<indirizzo del dispositivo>/` per la dashboard.
 
-Annota tutti gli indirizzi: ne serve uno per pannello.
+### 4. Dai un nome ai pannelli
 
-### 4. Aggiungi i pannelli
+I posti si riempiono nell'ordine in cui i pannelli trasmettono, non secondo la disposizione sul tetto. Per capire
+quale è quale:
 
-Per ogni indirizzo aggiungi un blocco sotto `sensor:` con il nome che vuoi vedere in Home Assistant:
+- guarda l'entità **Address** di ogni posto (o il dettaglio del pannello nella dashboard) e confrontala con gli ID
+  degli ottimizzatori che conosci dall'app Tigo o dall'installatore;
+- oppure copri o ombreggia un pannello per un minuto e guarda quale posto scende.
+
+Poi rinomina le entità in Home Assistant (Panel 3 → B4): il nome resta, perché l'entità è legata al posto e il posto
+all'ottimizzatore.
+
+Per ricominciare (ottimizzatori nuovi, ordine sbagliato) premi **Reset panel assignments** in Home Assistant o nella
+dashboard (tab Sistema): i posti vengono liberati e si riempiono di nuovo man mano che i pannelli trasmettono.
+
+---
+
+## Dashboard web
+
+Quando il dispositivo ha anche `web_server:`, il componente serve una propria pagina su `/`. È autonoma (non serve
+internet) e funziona da telefono e da computer, in italiano o in inglese, con tema scuro o chiaro.
+
+| Tab | Contenuto |
+|---|---|
+| **Panoramica** | potenza totale con indicatore, pannelli online, mismatch tra pannelli, temperatura, tensione d'ingresso, grafico live, mappa dell'impianto con ogni pannello illuminato in proporzione al migliore |
+| **Analisi** | produzione impilata delle ultime 24 h, classifica dell'energia rispetto alla mediana, punteggio di salute dell'impianto, analisi automatiche, mappa di calore pannello × ora |
+| **Pannelli** | tabella ordinabile con tutti i valori, scarto dalla mediana, esportazione CSV |
+| **Sistema** | ottimizzatori non configurati con indirizzo da copiare, uso dei posti, azzeramento delle assegnazioni |
+
+<img src="../images/example-esphome-analysis.it.jpg" alt="Tab Analisi della dashboard web" width="900"/>
+
+<sub>Screenshot con dati inventati: 12 pannelli, B4 in ombra nel pomeriggio.</sub>
+
+- Lo storico di 24 ore (intervalli di 15 minuti) è tenuto nella RAM dell'ESP32: riparte dopo un riavvio. Per lo
+  storico lungo usa Home Assistant.
+- La pagina standard di ESPHome resta su `/?esphome` (pulsante **UI ESPHome** in alto).
+- JSON per altri programmi: `/tigo/live` (valori attuali) e `/tigo/history` (Wh per pannello, 96 intervalli).
+- Se `web_server` ha `auth:`, dashboard ed endpoint JSON chiedono le stesse credenziali.
+- `web_dashboard: false` lascia su `/` la pagina standard di ESPHome.
+
+---
+
+## Nomi fissi nel YAML (opzionale)
+
+Al posto dei posti automatici, o insieme a loro, un pannello si può dichiarare con il suo long address e i nomi che
+vuoi. Un pannello dichiarato così non occupa un posto.
 
 ```yaml
 sensor:
@@ -115,32 +159,39 @@ sensor:
       name: A1 Power
     voltage_in:
       name: A1 Voltage In
-    voltage_out:
-      name: A1 Voltage Out
-    current:
-      name: A1 Current
     temperature:
       name: A1 Temperature
-    rssi:
-      name: A1 RSSI
-    duty_cycle:
-      name: A1 Duty Cycle
-
-  - platform: tigo_rs485
-    long_address: "04C05B4000B1A689"
-    power:
-      name: A2 Power
 ```
 
-Tutti i sensori sono opzionali: tieni solo quelli che ti servono (ad esempio solo `power`, come per A2). Installa di
-nuovo: i pannelli configurati spariscono da **Unconfigured panels** e compaiono come entità.
-
-### 5. Energia (opzionale)
-
-Per la dashboard Energia di Home Assistant dai un `id` al sensore di potenza e integralo sul dispositivo, sempre
-sotto `sensor:`:
+L'indirizzo lo mostrano l'entità **Address** del posto, la dashboard o il sensore dei pannelli non configurati:
 
 ```yaml
+text_sensor:
+  - platform: tigo_rs485
+    unconfigured_panels:
+      name: Unconfigured panels
+```
+
+> Se il YAML ha già una sezione `sensor:` o `text_sensor:`, aggiungi sotto solo la voce `- platform: tigo_rs485`: una
+> sezione non può comparire due volte.
+
+Il long address di un modulo si impara quando il CCA rilegge la tabella dei nodi, cosa che succede di rado (di
+solito alla discovery). Finché non è noto il pannello compare come `node 001A` tra quelli non configurati e non prende
+un posto; puoi dichiararlo temporaneamente con l'ID corto, sapendo che il CCA può riassegnarlo:
+
+```yaml
+  - platform: tigo_rs485
+    node_id: 0x001A
+    power:
+      name: A3 Power
+```
+
+### Energia per la dashboard Energia
+
+Dai un `id` al sensore di potenza e integralo sul dispositivo:
+
+```yaml
+sensor:
   - platform: tigo_rs485
     long_address: "04C05B4000B1A688"
     power:
@@ -157,21 +208,10 @@ sotto `sensor:`:
     restore: true
 ```
 
-[`example.yaml`](example.yaml) è una configurazione completa, anche con un sensore di potenza totale: usala come
-riferimento per controllare la tua, non come file da copiare.
+Con i posti automatici si ottiene lo stesso in Home Assistant con l'helper **Integrale** su `Panel N Power`.
 
-### Long address non ancora noto
-
-Il long address di un modulo si impara quando il CCA rilegge la tabella dei nodi, cosa che succede di rado (di
-solito alla discovery). Finché non è noto il pannello compare come `node 001A` tra quelli non configurati; puoi
-usarlo temporaneamente con l'ID corto, sapendo che il CCA può riassegnarlo:
-
-```yaml
-  - platform: tigo_rs485
-    node_id: 0x001A
-    power:
-      name: A3 Power
-```
+[`example.yaml`](example.yaml) è una configurazione completa: usala come riferimento per controllare la tua, non come
+file da copiare.
 
 ---
 
@@ -181,20 +221,24 @@ usarlo temporaneamente con l'ID corto, sapendo che il CCA può riassegnarlo:
 
 | Opzione | Predefinito | Descrizione |
 |---|---|---|
-| `uart_id` | — | UART collegato al bus (38400 baud) |
+| `uart_id` | — | UART collegata al bus (38400 baud) |
+| `panels` | `0` | posti automatici (0–64); ognuno ha i suoi sensori e un sensore di testo con l'indirizzo, più un pulsante di reset |
+| `panel_sensors` | tutti | sensori creati per ogni posto: `power`, `voltage_in`, `voltage_out`, `current`, `temperature`, `rssi`, `duty_cycle` |
+| `panel_name` | `Panel {}` | nome dei posti, `{}` è il numero: ad esempio `Pannello {}` |
+| `web_dashboard` | `true` | serve la dashboard su `/` quando `web_server` è configurato |
 | `offline_timeout` | `5min` | dopo quanto un pannello silenzioso diventa non disponibile |
 
 **`sensor` / `platform: tigo_rs485`** — esattamente uno tra `long_address` (16 cifre esadecimali) e `node_id`,
 più uno o più tra `power` (W), `voltage_in` (V), `voltage_out` (V), `current` (A), `temperature` (°C),
 `rssi` (valore grezzo 0–255, non dBm), `duty_cycle` (%).
 
-**`text_sensor` / `platform: tigo_rs485`** — `unconfigured_panels`: pannelli che trasmettono ma non sono configurati.
+**`text_sensor` / `platform: tigo_rs485`** — `unconfigured_panels`: pannelli che trasmettono senza posto né voce nel YAML.
 
 ---
 
 ## Sviluppo
 
-Il decoder del protocollo (`components/tigo_rs485/tigo_protocol.*`) non dipende da ESPHome e si testa sul computer:
+Il decoder del protocollo (`components/tigo_rs485/tigo_protocol.*`) non dipende da ESPHome e si prova sull'host:
 
 ```bash
 c++ -std=c++17 -I esphome/components/tigo_rs485 esphome/tests/host_test.cpp esphome/components/tigo_rs485/tigo_protocol.cpp -o host_test
@@ -204,5 +248,8 @@ c++ -std=c++17 -I esphome/components/tigo_rs485 esphome/tests/host_test.cpp esph
 ./host_test issue_20_initial.bin
 ```
 
-Senza argomenti esegue i test sintetici; con una cattura del bus (per esempio quella di
-[taptap](https://github.com/willglynn/taptap), `src/test_data/issue_20_initial.bin`) stampa ogni power report.
+Senza argomenti esegue i test sintetici; con una cattura del bus (ad esempio `src/test_data/issue_20_initial.bin` di
+[taptap](https://github.com/willglynn/taptap)) stampa ogni power report.
+
+La dashboard è `components/tigo_rs485/dashboard/index.html`, incorporata compressa nel firmware. Aperta in locale con
+`?demo` (o da `file://`) gira su dati inventati; `?lang=it|en` e `?tab=ov|an|pn|sy` scelgono lingua e tab.

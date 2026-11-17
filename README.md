@@ -49,19 +49,22 @@ The ESP32 becomes an ESPHome device: Home Assistant discovers it and every panel
 - **Best if** you already use Home Assistant and want the panel data next to the rest of your home.
 - **What you get**: native entities for each panel's power, voltages, current, temperature, RSSI and duty cycle;
   history, long-term statistics, the Energy dashboard, automations and notifications (e.g. "B4 is producing little").
-- **Setup**: one YAML file; OTA updates and logs from ESPHome. The component is downloaded from this repository.
-- **Limits**: no web page of its own; panels must be listed in the YAML (a diagnostic sensor shows the ones not
-  configured yet, with the address ready to copy).
+  Plus a web dashboard on the ESP32 itself, with 24-hour production, energy ranking, heatmap and automatic insights.
+- **Setup**: a few lines of YAML, panels are found by themselves (`panels: 12`); OTA updates and logs from ESPHome.
+  The component is downloaded from this repository.
+- **Limits**: the dashboard keeps 24 hours in RAM (long-term history is in Home Assistant); panels get a generic
+  name (Panel 1, Panel 2, …) to rename in Home Assistant, or fixed names in the YAML.
 
 ### Differences at a glance
 
 | | Arduino | ESPHome |
 |---|---|---|
-| Where you see the data | the ESP32's web dashboard | Home Assistant |
+| Where you see the data | the ESP32's web dashboard | Home Assistant, plus the ESP32's web dashboard |
 | Needs Home Assistant | no | yes |
-| History | only while the page is open | full, in Home Assistant |
+| History | only while the page is open | full in Home Assistant; last 24 h on the dashboard |
 | Setup | Arduino IDE, Wi-Fi and pins in the code | ESPHome YAML |
-| Panel names | `/panels` page | in the YAML |
+| New panels | appear by themselves | appear by themselves (automatic slots) |
+| Panel names | `/panels` page | renamed in Home Assistant, or fixed in the YAML |
 | Panel that stops reporting | after 5 minutes `online: false` and values at 0 | after 5 minutes "unavailable" |
 | Updates | Arduino OTA | ESPHome OTA |
 | Custom integration in HA | yes (tigosolar-local) | no, native |
