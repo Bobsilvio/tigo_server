@@ -401,7 +401,7 @@
           g('vout-').textContent = d.vout  != null ? d.vout.toFixed(2)+'V'  : '—';
           g('amp-' ).textContent = d.amp   != null ? d.amp.toFixed(2) +'A'  : '—';
           g('temp-').textContent = d.temp  != null ? d.temp.toFixed(1)+'°C' : '—';
-          g('rssi-').textContent = d.rssi  != null ? d.rssi+'dB'            : '—';
+          g('rssi-').textContent = d.rssi  != null ? 'RSSI ' + d.rssi        : '—';  // raw 0-255, not dB
           g('bc-'  ).textContent = d.barcode || '—';
           g('ts-'  ).textContent = timeStr();
         });
