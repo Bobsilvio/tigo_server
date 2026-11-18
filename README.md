@@ -18,16 +18,16 @@ firmware; what changes is **where you see the data**.
 </tr>
 <tr>
 <td><img src="images/example-arduino.png" alt="Dashboard of the Arduino variant"/></td>
-<td><img src="images/example-esphome.png" alt="Entities of the ESPHome variant in Home Assistant"/></td>
+<td><img src="images/example-esphome.png" alt="Dashboard of the ESPHome variant in the Home Assistant sidebar"/></td>
 </tr>
 <tr>
 <td>The ESP32's own web dashboard: one card per panel, total power over time and a panel comparison.</td>
-<td>Native Home Assistant entities, used in a dashboard: power, energy, temperatures and history.</td>
+<td>Native Home Assistant entities for every panel, plus a dashboard with live array, analysis and history, also in the Home Assistant sidebar.</td>
 </tr>
 </table>
 
-<sub>Examples with invented data: 12 panels, B4 shaded. Left: the real firmware dashboard (its interface is in
-Italian). Right: a mockup of a Home Assistant dashboard built from the ESPHome variant's entities.</sub>
+<sub>Examples with invented data: 12 panels, B4 shaded. Left: the firmware dashboard (its interface is in Italian).
+Right: the ESPHome variant's dashboard opened from the Home Assistant sidebar through the add-on.</sub>
 
 ### Arduino: a standalone device
 
@@ -54,7 +54,7 @@ The ESP32 becomes an ESPHome device: Home Assistant discovers it and every panel
   Home Assistant already keeps.
 - **Setup**: a few lines of YAML, panels are found by themselves (`panels: 12`); OTA updates and logs from ESPHome.
   The component is downloaded from this repository.
-- **Limits**: the dashboard keeps 24 hours in RAM (long-term history is in Home Assistant); panels get a generic
+- **Limits**: the ESP32 dashboard keeps 24 hours in RAM (the add-on shows the long-term history from Home Assistant); panels get a generic
   name (Panel 1, Panel 2, …) to rename in Home Assistant, or fixed names in the YAML.
 
 ### Differences at a glance
@@ -63,7 +63,7 @@ The ESP32 becomes an ESPHome device: Home Assistant discovers it and every panel
 |---|---|---|
 | Where you see the data | the ESP32's web dashboard | Home Assistant, plus the ESP32's web dashboard |
 | Needs Home Assistant | no | yes |
-| History | only while the page is open | full in Home Assistant; last 24 h on the dashboard |
+| History | only while the page is open | full in Home Assistant; 24 h on the ESP32 dashboard, 7 days to 12 months in the add-on |
 | Setup | Arduino IDE, Wi-Fi and pins in the code | ESPHome YAML |
 | New panels | appear by themselves | appear by themselves (automatic slots) |
 | Panel names | `/panels` page | renamed in Home Assistant, or fixed in the YAML |

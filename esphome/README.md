@@ -135,8 +135,8 @@ internet needed) and works from phone and desktop, in English or Italian, dark o
 
 <sub>Screenshots with invented data: 12 panels, B4 shaded in the afternoon.</sub>
 
-- The 24-hour history (15-minute buckets) is kept in the ESP32 RAM: it restarts after a reboot. For long-term
-  history use Home Assistant.
+- The 24-hour history (15-minute buckets) is kept in the ESP32 RAM: it restarts after a reboot. The long-term
+  history is in Home Assistant, and the [add-on](#in-the-home-assistant-sidebar) shows it in the same dashboard.
 - The standard ESPHome page is still at `/?esphome` (button **ESPHome UI** in the header).
 - JSON for other programs: `/tigo/live` (current values) and `/tigo/history` (Wh per panel, 96 buckets).
 - If `web_server` has `auth:`, the dashboard and the JSON endpoints ask for the same credentials.

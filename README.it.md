@@ -18,16 +18,16 @@ firmware del CCA; cambia **dove vedi i dati**.
 </tr>
 <tr>
 <td><img src="images/example-arduino.png" alt="Dashboard della variante Arduino"/></td>
-<td><img src="images/example-esphome.it.png" alt="Entità della variante ESPHome in Home Assistant"/></td>
+<td><img src="images/example-esphome.it.png" alt="Dashboard della variante ESPHome nella sidebar di Home Assistant"/></td>
 </tr>
 <tr>
 <td>La dashboard web dell'ESP32: una scheda per pannello, potenza totale nel tempo e confronto tra pannelli.</td>
-<td>Le entità native in Home Assistant, usate in una dashboard: potenza, energia, temperature e storico.</td>
+<td>Entità native in Home Assistant per ogni pannello, più una dashboard con impianto live, analisi e storico, anche nella sidebar di Home Assistant.</td>
 </tr>
 </table>
 
-<sub>Esempi con dati inventati: 12 pannelli, B4 in ombra. A sinistra la vera dashboard del firmware, a destra un
-mockup di una dashboard Home Assistant costruita con le entità della variante ESPHome.</sub>
+<sub>Esempi con dati inventati: 12 pannelli, B4 in ombra. A sinistra la dashboard del firmware, a destra la dashboard
+della variante ESPHome aperta dalla sidebar di Home Assistant tramite l'add-on.</sub>
 
 ### Arduino: un dispositivo autonomo
 
@@ -54,7 +54,7 @@ L'ESP32 diventa un dispositivo ESPHome: Home Assistant lo trova da solo e ogni p
   storico che Home Assistant registra già.
 - **Configurazione**: poche righe di YAML, i pannelli si trovano da soli (`panels: 12`); aggiornamenti OTA e log da
   ESPHome. Il componente si scarica da questo repository.
-- **Limiti**: la dashboard tiene 24 ore in RAM (lo storico lungo è in Home Assistant); i pannelli hanno un nome
+- **Limiti**: la dashboard dell'ESP32 tiene 24 ore in RAM (l'add-on mostra lo storico lungo di Home Assistant); i pannelli hanno un nome
   generico (Panel 1, Panel 2, …) da rinominare in Home Assistant, oppure nomi fissi nel YAML.
 
 ### Le differenze in breve
@@ -63,7 +63,7 @@ L'ESP32 diventa un dispositivo ESPHome: Home Assistant lo trova da solo e ogni p
 |---|---|---|
 | Dove vedi i dati | dashboard web dell'ESP32 | Home Assistant, più la dashboard web dell'ESP32 |
 | Serve Home Assistant | no | sì |
-| Storico | solo a pagina aperta | completo in Home Assistant; ultime 24 h nella dashboard |
+| Storico | solo a pagina aperta | completo in Home Assistant; 24 h nella dashboard dell'ESP32, da 7 giorni a 12 mesi nell'add-on |
 | Configurazione | Arduino IDE, Wi-Fi e pin nel codice | YAML ESPHome |
 | Pannelli nuovi | compaiono da soli | compaiono da soli (posti automatici) |
 | Nomi dei pannelli | pagina `/panels` | rinominati in Home Assistant, o fissi nel YAML |

@@ -137,8 +137,8 @@ internet) e funziona da telefono e da computer, in italiano o in inglese, con te
 
 <sub>Screenshot con dati inventati: 12 pannelli, B4 in ombra nel pomeriggio.</sub>
 
-- Lo storico di 24 ore (intervalli di 15 minuti) è tenuto nella RAM dell'ESP32: riparte dopo un riavvio. Per lo
-  storico lungo usa Home Assistant.
+- Lo storico di 24 ore (intervalli di 15 minuti) è tenuto nella RAM dell'ESP32: riparte dopo un riavvio. Lo storico
+  lungo è in Home Assistant, e l'[add-on](#nella-sidebar-di-home-assistant) lo mostra nella stessa dashboard.
 - La pagina standard di ESPHome resta su `/?esphome` (pulsante **UI ESPHome** in alto).
 - JSON per altri programmi: `/tigo/live` (valori attuali) e `/tigo/history` (Wh per pannello, 96 intervalli).
 - Se `web_server` ha `auth:`, dashboard ed endpoint JSON chiedono le stesse credenziali.
