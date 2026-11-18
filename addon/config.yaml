@@ -3,7 +3,7 @@ version: "1.0.0"
 slug: tigo_rs485_monitor
 description: >-
   Dashboard of the Tigo RS485 Monitor (ESPHome) in the Home Assistant sidebar:
-  live panels, analysis and months of energy history per panel.
+  live panels, analysis and the energy history per panel recorded by Home Assistant.
 url: https://github.com/Bobsilvio/tigo_server
 arch:
   - amd64
@@ -17,15 +17,15 @@ ingress: true
 ingress_port: 8099
 panel_icon: "mdi:solar-panel-large"
 panel_title: "Tigo"
+# Reads the long-term statistics of the panel power sensors from the recorder
+homeassistant_api: true
 options:
   host: ""
   port: 80
   username: ""
   password: ""
-  retention_days: 730
 schema:
   host: str
   port: port
   username: "str?"
   password: "password?"
-  retention_days: "int(30,3650)"

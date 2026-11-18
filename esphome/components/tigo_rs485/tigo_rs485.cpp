@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 
+#include "esphome/core/application.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
@@ -479,9 +480,12 @@ std::string TigoRS485::live_json() {
   std::string out;
   out.reserve(256 + 320 * (this->panels_.size() + this->slots_.size()));
   char buf[64];
-  snprintf(buf, sizeof(buf), "{\"uptime\":%" PRIu32 ",\"timeout\":%" PRIu32 ",\"slots\":%u,\"panels\":[",
+  snprintf(buf, sizeof(buf), "{\"uptime\":%" PRIu32 ",\"timeout\":%" PRIu32 ",\"slots\":%u,",
            uint32_t(up / 1000), this->offline_timeout_ / 1000, unsigned(this->slots_.size()));
   out += buf;
+  json_str(out, "device", std::string(App.get_friendly_name().empty() ? App.get_name().c_str()
+                                                                      : App.get_friendly_name().c_str()));
+  out += "\"panels\":[";
   bool first = true;
   this->for_each_panel_([&](Panel &p) {
     bool is_slot = std::find(this->slots_.begin(), this->slots_.end(), &p) != this->slots_.end();
@@ -491,6 +495,9 @@ std::string TigoRS485::live_json() {
     out += '{';
     json_str(out, "name", p.label);
     json_str(out, "addr", p.long_address ? long_hex(p.long_address) : std::string());
+    // name of the power entity: lets the add-on find its Home Assistant statistics
+    if (p.sensors[PANEL_POWER] != nullptr)
+      json_str(out, "ent", std::string(p.sensors[PANEL_POWER]->get_name().c_str()));
     int node = p.last_node >= 0 ? p.last_node : p.node_id;
     NodeInfo *n = node >= 0 ? this->node_(node, false) : nullptr;
     snprintf(buf, sizeof(buf), "\"node\":%d,\"hw\":%d,\"slot\":%d,\"online\":%d,", node,

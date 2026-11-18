@@ -50,8 +50,8 @@ L'ESP32 diventa un dispositivo ESPHome: Home Assistant lo trova da solo e ogni p
 - **Cosa offre**: entità native per potenza, tensioni, corrente, temperatura, RSSI e duty cycle di ogni pannello;
   storico, statistiche a lungo termine, dashboard Energia, automazioni e notifiche (per esempio "B4 produce poco").
   In più una dashboard web sull'ESP32 stesso, con produzione delle ultime 24 ore, classifica dell'energia, mappa di
-  calore e analisi automatiche, che l'[add-on](addon/README.it.md) porta nella sidebar di Home Assistant con mesi di
-  storico.
+  calore e analisi automatiche, che l'[add-on](addon/README.it.md) porta nella sidebar di Home Assistant insieme allo
+  storico che Home Assistant registra già.
 - **Configurazione**: poche righe di YAML, i pannelli si trovano da soli (`panels: 12`); aggiornamenti OTA e log da
   ESPHome. Il componente si scarica da questo repository.
 - **Limiti**: la dashboard tiene 24 ore in RAM (lo storico lungo è in Home Assistant); i pannelli hanno un nome
@@ -95,7 +95,7 @@ in cui [taptap](https://github.com/willglynn/taptap) è sbagliato o incompleto.
 ```
 arduino/    variante Arduino: sketch TigoServer/ e README
 esphome/    variante ESPHome: componente tigo_rs485, example.yaml, test, README
-addon/      add-on di Home Assistant: la dashboard nella sidebar, storico lungo
+addon/      add-on di Home Assistant: la dashboard nella sidebar, storico dalle statistiche di HA
 docs/       note sul protocollo
 images/     immagini
 ```

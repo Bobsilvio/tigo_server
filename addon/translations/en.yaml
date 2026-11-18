@@ -11,6 +11,3 @@ configuration:
   password:
     name: Password
     description: Only if web_server has auth
-  retention_days:
-    name: History (days)
-    description: How many days of hourly energy to keep

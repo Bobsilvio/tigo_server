@@ -147,7 +147,8 @@ internet) e funziona da telefono e da computer, in italiano o in inglese, con te
 ### Nella sidebar di Home Assistant
 
 L'[add-on](../addon/README.it.md) mette la stessa dashboard nella sidebar di Home Assistant, raggiungibile da remoto
-e nell'app, e registra l'energia di ogni pannello ora per ora: il tab Analisi guadagna 7 giorni, 30 giorni e 12 mesi.
+e nell'app, e legge lo storico che Home Assistant registra già per i sensori di potenza: il tab Analisi guadagna
+7 giorni, 30 giorni e 12 mesi.
 
 ---
 

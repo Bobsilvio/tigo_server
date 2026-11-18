@@ -11,6 +11,3 @@ configuration:
   password:
     name: Password
     description: Solo se web_server ha auth
-  retention_days:
-    name: Storico (giorni)
-    description: Quanti giorni di energia oraria conservare

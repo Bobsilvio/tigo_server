@@ -145,7 +145,8 @@ internet needed) and works from phone and desktop, in English or Italian, dark o
 ### In the Home Assistant sidebar
 
 The [add-on](../addon/README.md) puts the same dashboard in the Home Assistant sidebar, reachable remotely and in
-the app, and records the energy of each panel hour by hour: the Analysis tab gains 7 days, 30 days and 12 months.
+the app, and reads the history Home Assistant already keeps for the power sensors: the Analysis tab gains 7 days,
+30 days and 12 months.
 
 ---
 

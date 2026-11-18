@@ -2,8 +2,8 @@
 
 **English** · [Italiano](README.it.md)
 
-The dashboard of the [ESPHome variant](../esphome/README.md) in the Home Assistant sidebar, with months of energy
-history per panel.
+The dashboard of the [ESPHome variant](../esphome/README.md) in the Home Assistant sidebar, with the energy history
+of each panel taken from what Home Assistant already records.
 
 <img src="../images/example-addon-history.jpg" alt="Add-on in Home Assistant: 30-day history" width="900"/>
 
@@ -17,15 +17,15 @@ history per panel.
 3. In **Configuration** set `host` to the ESP32 IP address (and `username`/`password` if `web_server` has `auth:`).
 4. Start it and open **Tigo** in the sidebar.
 
-The ESP32 must run the `tigo_rs485` component with `web_server:` enabled. Details, options and how the history is
-recorded: [DOCS.md](DOCS.md).
+The ESP32 must run the `tigo_rs485` component with `web_server:` enabled. The history comes from the long-term
+statistics of the panel power sensors: the add-on stores nothing. Details: [DOCS.md](DOCS.md).
 
 ## What it adds to the ESP32 page
 
 | | ESP32 page | Add-on |
 |---|---|---|
 | Where | `http://<esp32>/`, local network | Home Assistant sidebar, also remote and in the app |
-| History | last 24 h, lost at reboot | 7 days, 30 days, 12 months, kept for `retention_days` |
+| History | last 24 h, lost at reboot | 7 days, 30 days, 12 months, from the Home Assistant statistics |
 | Analysis | live and 24 h | also daily/monthly energy, ranking and relative heatmap over the period |
 
 ## Development
